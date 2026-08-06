@@ -1,0 +1,17 @@
+{
+  "name": "prime-pocket",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mobile access to Prime Agent without a hosted control plane",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev:bridge": "pnpm --filter @prime-pocket/bridge dev",
+    "start:bridge": "pnpm --filter @prime-pocket/bridge start",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

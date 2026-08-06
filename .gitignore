@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.expo/
+.turbo/
+*.log
+.DS_Store
+.env
+.env.local
+coverage/
+.prime-pocket/
+*.tsbuildinfo
+apps/mobile/.expo/
+apps/mobile/dist/

@@ -1,0 +1,47 @@
+{
+  "name": "Prime Pocket",
+  "slug": "prime-pocket",
+  "version": "0.1.0",
+  "orientation": "portrait",
+  "scheme": "prime-pocket",
+  "userInterfaceStyle": "light",
+  "newArchEnabled": true,
+  "icon": "./assets/icon.png",
+  "splash": {
+    "image": "./assets/splash.png",
+    "resizeMode": "contain",
+    "backgroundColor": "#0B1F17"
+  },
+  "ios": {
+    "supportsTablet": true,
+    "bundleIdentifier": "ai.primeintellect.pocket",
+    "infoPlist": {
+      "NSAppTransportSecurity": {
+        "NSAllowsArbitraryLoads": true,
+        "NSAllowsLocalNetworking": true
+      },
+      "NSCameraUsageDescription": "Scan a pairing QR code from the Pocket bridge."
+    }
+  },
+  "android": {
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#0B1F17"
+    },
+    "package": "ai.primeintellect.pocket",
+    "usesCleartextTraffic": true
+  },
+  "plugins": [
+    "expo-router",
+    "expo-secure-store",
+    [
+      "expo-camera",
+      {
+        "cameraPermission": "Allow Prime Pocket to scan bridge pairing QR codes."
+      }
+    ]
+  ],
+  "experiments": {
+    "typedRoutes": true
+  }
+}
