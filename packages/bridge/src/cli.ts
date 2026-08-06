@@ -99,6 +99,7 @@ program
         cancel: true,
         artifacts: true,
         launch: true,
+        images: true,
         demoMode: true,
       },
     };

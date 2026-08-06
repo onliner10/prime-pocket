@@ -26,6 +26,19 @@ export type AgentStatus =
   | "error"
   | "stopped";
 
+export interface HostCapabilities {
+  prompt: boolean;
+  steer: boolean;
+  followUp: boolean;
+  cancel: boolean;
+  artifacts: boolean;
+  launch: boolean;
+  /** Client may attach images on prompts; agent may return image artifacts/messages. */
+  images: boolean;
+  /** Bridge is using a mock/demo adapter instead of a live Prime daemon. */
+  demoMode: boolean;
+}
+
 export interface HostInfo {
   id: HostId;
   name: string;
@@ -38,17 +51,6 @@ export interface HostInfo {
   startedAt: string;
   /** Optional ntfy topic the bridge publishes to (may be unset). */
   ntfyTopic?: string;
-}
-
-export interface HostCapabilities {
-  prompt: boolean;
-  steer: boolean;
-  followUp: boolean;
-  cancel: boolean;
-  artifacts: boolean;
-  launch: boolean;
-  /** Bridge is using a mock/demo adapter instead of a live Prime daemon. */
-  demoMode: boolean;
 }
 
 export type AgentSummary = {
@@ -66,6 +68,18 @@ export type AgentSummary = {
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 
+/** Image attached to a transcript message (phone→agent or agent→phone). */
+export interface MessageImage {
+  mimeType: string;
+  /** Prefer artifact download for larger payloads. */
+  artifactId?: ArtifactId;
+  /** Inline base64 (no data: prefix) for small images. */
+  dataBase64?: string;
+  width?: number;
+  height?: number;
+  name?: string;
+}
+
 export interface TranscriptMessage {
   id: string;
   role: MessageRole;
@@ -73,6 +87,8 @@ export interface TranscriptMessage {
   createdAt: string;
   /** Tool name when role is tool. */
   toolName?: string;
+  /** Images shared on this message (both directions). */
+  images?: MessageImage[];
 }
 
 export interface ArtifactMeta {
@@ -81,6 +97,8 @@ export interface ArtifactMeta {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  /** Image artifacts are shown inline in the mobile UI. */
+  kind?: "image" | "file";
 }
 
 export interface AgentSnapshot {
@@ -135,11 +153,17 @@ export interface LaunchAgentRequest {
   resumeId?: string;
 }
 
+export interface PromptImage {
+  mimeType: string;
+  dataBase64: string;
+  name?: string;
+}
+
 export interface PromptRequest {
   message: string;
   /** Required by the bridge when the agent is already streaming. */
   streamingBehavior?: "steer" | "followUp";
-  images?: Array<{ mimeType: string; dataBase64: string }>;
+  images?: PromptImage[];
 }
 
 export interface SteerRequest {
@@ -148,6 +172,7 @@ export interface SteerRequest {
 
 export interface FollowUpRequest {
   message: string;
+  images?: PromptImage[];
 }
 
 export interface NeedsInputReply {
@@ -181,3 +206,7 @@ export type StreamServerMessage =
   | { type: "event"; event: AgentEvent }
   | { type: "pong" }
   | { type: "error"; message: string };
+
+export function isImageMime(mimeType: string): boolean {
+  return mimeType.startsWith("image/");
+}

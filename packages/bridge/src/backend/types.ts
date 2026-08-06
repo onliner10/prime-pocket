@@ -24,7 +24,7 @@ export interface AgentBackend {
   launch(req: LaunchAgentRequest): Promise<AgentSummary>;
   prompt(agentId: AgentId, req: PromptRequest): Promise<void>;
   steer(agentId: AgentId, message: string): Promise<void>;
-  followUp(agentId: AgentId, message: string): Promise<void>;
+  followUp(agentId: AgentId, message: string, images?: PromptRequest["images"]): Promise<void>;
   cancel(agentId: AgentId): Promise<void>;
   replyNeedsInput(agentId: AgentId, requestId: string, value: string | boolean): Promise<void>;
   readArtifact(agentId: AgentId, artifactId: string): Promise<{ meta: ArtifactMeta; body: Buffer } | undefined>;

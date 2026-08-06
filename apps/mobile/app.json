@@ -10,7 +10,7 @@
   "splash": {
     "image": "./assets/splash.png",
     "resizeMode": "contain",
-    "backgroundColor": "#0B1F17"
+    "backgroundColor": "#F2F2F2"
   },
   "ios": {
     "supportsTablet": true,
@@ -20,13 +20,14 @@
         "NSAllowsArbitraryLoads": true,
         "NSAllowsLocalNetworking": true
       },
-      "NSCameraUsageDescription": "Scan a pairing QR code from the Pocket bridge."
+      "NSCameraUsageDescription": "Scan a pairing QR code from the Pocket bridge.",
+      "NSPhotoLibraryUsageDescription": "Share screenshots and photos with Prime Agent."
     }
   },
   "android": {
     "adaptiveIcon": {
       "foregroundImage": "./assets/adaptive-icon.png",
-      "backgroundColor": "#0B1F17"
+      "backgroundColor": "#F2F2F2"
     },
     "package": "ai.primeintellect.pocket",
     "usesCleartextTraffic": true
@@ -38,6 +39,12 @@
       "expo-camera",
       {
         "cameraPermission": "Allow Prime Pocket to scan bridge pairing QR codes."
+      }
+    ],
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Allow Prime Pocket to share photos with your agents."
       }
     ]
   ],

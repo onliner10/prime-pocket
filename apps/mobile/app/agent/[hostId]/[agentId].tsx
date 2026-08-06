@@ -10,18 +10,21 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type {
-  AgentSnapshot,
-  ArtifactMeta,
-  PairedHost,
-  StreamServerMessage,
-  TranscriptMessage,
+import {
+  isImageMime,
+  type AgentSnapshot,
+  type ArtifactMeta,
+  type PairedHost,
+  type StreamServerMessage,
+  type TranscriptMessage,
 } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../../src/api";
 import { loadPairedHosts } from "../../../src/storage";
 import { colors, radii } from "../../../src/theme";
 import { CircleButton, IconGlyph } from "../../../src/components/CircleButton";
-import { PillComposer } from "../../../src/components/PillComposer";
+import { PillComposer, type PendingImage } from "../../../src/components/PillComposer";
+import { ArtifactImage, MessageImages } from "../../../src/components/MessageImages";
+import { pickImages } from "../../../src/pickImages";
 
 function InlineCode({ text }: { text: string }) {
   const parts = text.split(/(`[^`]+`)/g);
@@ -47,6 +50,7 @@ export default function AgentScreen() {
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [streamingText, setStreamingText] = useState<Record<string, string>>({});
   const [needsInput, setNeedsInput] = useState<{ requestId: string; prompt: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,19 +137,35 @@ export default function AgentScreen() {
   }, [client, agentId, applyServerMessage]);
 
   async function send() {
-    if (!client || !agentId || !draft.trim()) return;
+    if (!client || !agentId) return;
+    if (!draft.trim() && pendingImages.length === 0) return;
     setSending(true);
     setError(null);
     try {
       await client.prompt(agentId, {
-        message: draft.trim(),
+        message: draft.trim() || (pendingImages.length ? "Shared image(s)" : ""),
         streamingBehavior: snapshot?.streaming ? "followUp" : undefined,
+        images: pendingImages.map((img) => ({
+          mimeType: img.mimeType,
+          dataBase64: img.dataBase64,
+          name: img.name,
+        })),
       });
       setDraft("");
+      setPendingImages([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function onAttach() {
+    try {
+      const picked = await pickImages();
+      if (picked.length) setPendingImages((prev) => [...prev, ...picked]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -220,36 +240,45 @@ export default function AgentScreen() {
             {artifacts.length > 0 ? (
               <View style={styles.changesCard}>
                 <Text style={styles.changesTitle}>Changes {artifacts.length}</Text>
-                {artifacts.map((a) => (
-                  <Pressable
-                    key={a.id}
-                    style={styles.fileRow}
-                    onPress={() => {
-                      const url = client?.artifactUrl(agentId!, a.id);
-                      if (url && host) {
-                        void Linking.openURL(`${url}?token=${encodeURIComponent(host.token)}`);
-                      }
-                    }}
-                  >
-                    <View style={styles.fileLeft}>
-                      <View style={styles.fileIcon}>
-                        <Text style={styles.fileIconText}>
-                          {a.name.endsWith(".ts") || a.name.endsWith(".tsx")
-                            ? "TS"
-                            : a.name.endsWith(".js")
-                              ? "JS"
-                              : "MD"}
+                {artifacts.map((a) => {
+                  const url = host
+                    ? `${client?.artifactUrl(agentId!, a.id)}?token=${encodeURIComponent(host.token)}`
+                    : undefined;
+                  const imageLike = a.kind === "image" || isImageMime(a.mimeType);
+                  return (
+                    <View key={a.id} style={{ marginBottom: 8 }}>
+                      <Pressable
+                        style={styles.fileRow}
+                        onPress={() => {
+                          if (url) void Linking.openURL(url);
+                        }}
+                      >
+                        <View style={styles.fileLeft}>
+                          <View style={styles.fileIcon}>
+                            <Text style={styles.fileIconText}>
+                              {imageLike
+                                ? "IMG"
+                                : a.name.endsWith(".ts") || a.name.endsWith(".tsx")
+                                  ? "TS"
+                                  : a.name.endsWith(".js")
+                                    ? "JS"
+                                    : "MD"}
+                            </Text>
+                          </View>
+                          <Text style={styles.fileName}>{a.name}</Text>
+                        </View>
+                        <Text style={styles.diff}>
+                          <Text style={{ color: colors.diffAdd }}>
+                            +{Math.max(1, Math.round(a.sizeBytes / 40))}
+                          </Text>
+                          {"  "}
+                          <Text style={{ color: colors.diffDel }}>-0</Text>
                         </Text>
-                      </View>
-                      <Text style={styles.fileName}>{a.name}</Text>
+                      </Pressable>
+                      {imageLike && url ? <ArtifactImage mimeType={a.mimeType} url={url} /> : null}
                     </View>
-                    <Text style={styles.diff}>
-                      <Text style={{ color: colors.diffAdd }}>+{Math.max(1, Math.round(a.sizeBytes / 40))}</Text>
-                      {"  "}
-                      <Text style={{ color: colors.diffDel }}>-0</Text>
-                    </Text>
-                  </Pressable>
-                ))}
+                  );
+                })}
               </View>
             ) : null}
 
@@ -267,7 +296,8 @@ export default function AgentScreen() {
         renderItem={({ item }) => (
           <View style={[styles.msg, item.role === "user" ? styles.msgUser : styles.msgAssistant]}>
             <Text style={styles.msgRole}>{item.role}</Text>
-            <Text style={styles.bodyText}>{item.text}</Text>
+            {item.text ? <Text style={styles.bodyText}>{item.text}</Text> : null}
+            <MessageImages images={item.images} host={host} agentId={agentId} />
           </View>
         )}
       />
@@ -291,7 +321,9 @@ export default function AgentScreen() {
         value={draft}
         onChangeText={setDraft}
         onSubmit={() => void send()}
-        onPlus={() => undefined}
+        onPlus={() => void onAttach()}
+        pendingImages={pendingImages}
+        onRemoveImage={(id) => setPendingImages((prev) => prev.filter((p) => p.id !== id))}
         placeholder="Follow up..."
       />
     </SafeAreaView>
@@ -316,7 +348,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.ink,
   },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 160 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 200 },
   summary: { marginBottom: 16 },
   placeholderSummary: { color: colors.muted, marginBottom: 16 },
   bodyText: { fontSize: 16, lineHeight: 24, color: colors.ink },
@@ -390,7 +422,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 86,
+    bottom: 110,
   },
   actionRow: { flexDirection: "row", gap: 8 },
   actionPill: {

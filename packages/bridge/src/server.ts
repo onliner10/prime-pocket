@@ -277,9 +277,12 @@ export class BridgeServer {
 
         if (req.method === "POST" && rest === "prompt") {
           const body = JSON.parse((await readBody(req)) || "{}") as PromptRequest;
-          if (!body.message) {
-            sendError(res, 400, "message required", "bad_request");
+          if (!body.message?.trim() && !(body.images?.length)) {
+            sendError(res, 400, "message or images required", "bad_request");
             return;
+          }
+          if (!body.message?.trim() && body.images?.length) {
+            body.message = "Shared image(s)";
           }
           await this.backend.prompt(agentId, body);
           sendJson(res, 200, { ok: true });
@@ -295,7 +298,14 @@ export class BridgeServer {
 
         if (req.method === "POST" && rest === "follow-up") {
           const body = JSON.parse((await readBody(req)) || "{}") as FollowUpRequest;
-          await this.backend.followUp(agentId, body.message);
+          if (!body.message?.trim() && !(body.images?.length)) {
+            sendError(res, 400, "message or images required", "bad_request");
+            return;
+          }
+          if (!body.message?.trim() && body.images?.length) {
+            body.message = "Shared image(s)";
+          }
+          await this.backend.followUp(agentId, body.message, body.images);
           sendJson(res, 200, { ok: true });
           return;
         }

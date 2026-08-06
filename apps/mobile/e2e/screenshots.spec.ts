@@ -69,5 +69,62 @@ test.describe("Prime Pocket mobile screenshots", () => {
     await page.getByPlaceholder("Follow up...").press("Enter");
     await page.waitForTimeout(3200);
     await page.screenshot({ path: join(OUT, "05-agent-follow-up.png") });
+
+    // Bidirectional images: phone→agent upload + agent→phone screenshot reply
+    const TINY_PNG_B64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const paired = await page.evaluate(() => {
+      const raw = localStorage.getItem("prime-pocket.paired-hosts");
+      if (!raw) return null;
+      const hosts = JSON.parse(raw) as Array<{ token: string; baseUrl: string; hostId: string }>;
+      return hosts[0] ?? null;
+    });
+    expect(paired).toBeTruthy();
+    const agentsRes = await fetch(`${BRIDGE}/v1/agents`, {
+      headers: { authorization: `Bearer ${paired!.token}` },
+    });
+    const { agents } = (await agentsRes.json()) as {
+      agents: Array<{ id: string; hostId: string; name: string }>;
+    };
+    const agent = agents.find((a) => a.name === "demo-welcome") ?? agents[0]!;
+    for (let i = 0; i < 40; i++) {
+      const snapRes = await fetch(`${BRIDGE}/v1/agents/${agent.id}`, {
+        headers: { authorization: `Bearer ${paired!.token}` },
+      });
+      const snap = (await snapRes.json()) as { streaming: boolean; agent: { status: string } };
+      if (!snap.streaming && snap.agent.status !== "running") break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    const promptRes = await fetch(`${BRIDGE}/v1/agents/${agent.id}/prompt`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${paired!.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        message: "please review this screenshot from my phone",
+        images: [{ mimeType: "image/png", dataBase64: TINY_PNG_B64, name: "from-phone.png" }],
+      }),
+    });
+    expect(promptRes.ok).toBeTruthy();
+    for (let i = 0; i < 40; i++) {
+      const snapRes = await fetch(`${BRIDGE}/v1/agents/${agent.id}`, {
+        headers: { authorization: `Bearer ${paired!.token}` },
+      });
+      const snap = (await snapRes.json()) as {
+        messages: Array<{ role: string; images?: unknown[] }>;
+        artifacts: Array<{ mimeType: string }>;
+      };
+      const hasBoth =
+        snap.messages.some((m) => m.role === "user" && (m.images?.length ?? 0) > 0) &&
+        snap.messages.some((m) => m.role === "assistant" && (m.images?.length ?? 0) > 0) &&
+        snap.artifacts.some((a) => a.mimeType.startsWith("image/"));
+      if (hasBoth) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    await page.goto(`${EXPO}/agent/${agent.hostId}/${agent.id}`, { waitUntil: "networkidle" });
+    await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: join(OUT, "06-agent-images.png") });
   });
 });

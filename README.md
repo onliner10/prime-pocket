@@ -49,7 +49,13 @@ LAN works without Tailscale when phone and desktop share Wi‑Fi.
 
 Optional user tunnel (Cloudflare Tunnel, ngrok): put that public URL into the app’s manual pair fields — still your infra, not Pocket’s.
 
-## Live Prime Agent
+## Image sharing (both ways)
+
+- **Phone → agent:** tap **+** in the composer, pick photos, send with your follow-up. Images are uploaded in the prompt payload and stored as artifacts on the bridge.
+- **Agent → phone:** image artifacts and message attachments render inline in the thread (demo returns a PNG when you ask for a screenshot / image).
+
+Authenticated artifact URLs use `?token=` so `<Image>` can load previews without custom headers.
+
 
 When a Prime daemon socket is present, the bridge prefers it over demo mode:
 

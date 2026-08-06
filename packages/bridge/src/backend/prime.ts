@@ -57,6 +57,7 @@ export class PrimeDaemonBackend implements AgentBackend {
     cancel: true,
     artifacts: true,
     launch: true,
+    images: true,
     demoMode: false,
   };
 
@@ -197,8 +198,12 @@ export class PrimeDaemonBackend implements AgentBackend {
     await this.rawRequest({ type: "steer", agentId, message });
   }
 
-  async followUp(agentId: AgentId, message: string): Promise<void> {
-    await this.rawRequest({ type: "follow_up", agentId, message });
+  async followUp(
+    agentId: AgentId,
+    message: string,
+    images?: Array<{ mimeType: string; dataBase64: string; name?: string }>,
+  ): Promise<void> {
+    await this.rawRequest({ type: "follow_up", agentId, message, images });
   }
 
   async cancel(agentId: AgentId): Promise<void> {
