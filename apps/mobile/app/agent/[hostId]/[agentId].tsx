@@ -6,21 +6,42 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type {
   AgentSnapshot,
+  ArtifactMeta,
   PairedHost,
   StreamServerMessage,
   TranscriptMessage,
 } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../../src/api";
 import { loadPairedHosts } from "../../../src/storage";
-import { colors } from "../../../src/theme";
+import { colors, radii } from "../../../src/theme";
+import { CircleButton, IconGlyph } from "../../../src/components/CircleButton";
+import { PillComposer } from "../../../src/components/PillComposer";
+
+function InlineCode({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`)/g);
+  return (
+    <Text style={styles.bodyText}>
+      {parts.map((part, i) =>
+        part.startsWith("`") && part.endsWith("`") ? (
+          <Text key={i} style={styles.code}>
+            {part.slice(1, -1)}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        ),
+      )}
+    </Text>
+  );
+}
 
 export default function AgentScreen() {
+  const router = useRouter();
   const { hostId, agentId } = useLocalSearchParams<{ hostId: string; agentId: string }>();
   const [host, setHost] = useState<PairedHost | null>(null);
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
@@ -81,9 +102,7 @@ export default function AgentScreen() {
       setSnapshot((s) => (s ? { ...s, artifacts: [...s.artifacts, ev.artifact] } : s));
       return;
     }
-    if (ev.type === "error") {
-      setError(ev.message);
-    }
+    if (ev.type === "error") setError(ev.message);
   }, []);
 
   useEffect(() => {
@@ -105,16 +124,7 @@ export default function AgentScreen() {
     streamRef.current?.close();
     streamRef.current = client.openAgentStream(agentId, {
       onMessage: applyServerMessage,
-      onError: () => setError("Stream error — pull to reconnect by leaving and re-entering"),
-      onClose: () => {
-        // soft reconnect
-        setTimeout(() => {
-          if (!client) return;
-          streamRef.current = client.openAgentStream(agentId, {
-            onMessage: applyServerMessage,
-          });
-        }, 1500);
-      },
+      onError: () => setError("Stream disconnected — reopen to reconnect"),
     });
     return () => {
       streamRef.current?.close();
@@ -122,20 +132,15 @@ export default function AgentScreen() {
     };
   }, [client, agentId, applyServerMessage]);
 
-  async function send(mode: "prompt" | "steer" | "followUp") {
+  async function send() {
     if (!client || !agentId || !draft.trim()) return;
     setSending(true);
     setError(null);
     try {
-      const message = draft.trim();
-      if (mode === "steer") await client.steer(agentId, { message });
-      else if (mode === "followUp") await client.followUp(agentId, { message });
-      else {
-        await client.prompt(agentId, {
-          message,
-          streamingBehavior: snapshot?.streaming ? "followUp" : undefined,
-        });
-      }
+      await client.prompt(agentId, {
+        message: draft.trim(),
+        streamingBehavior: snapshot?.streaming ? "followUp" : undefined,
+      });
       setDraft("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -144,180 +149,260 @@ export default function AgentScreen() {
     }
   }
 
-  const liveRows: Array<TranscriptMessage | { id: string; role: "assistant"; text: string; live: true }> = [
-    ...messages,
-    ...Object.entries(streamingText).map(([id, text]) => ({
-      id,
-      role: "assistant" as const,
-      text,
-      live: true as const,
-    })),
-  ];
+  const assistantSummary = [...messages].reverse().find((m) => m.role === "assistant")?.text;
+  const artifacts: ArtifactMeta[] = snapshot?.artifacts ?? [];
 
   if (!host && !error) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.muted} />
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{snapshot?.agent.name ?? agentId}</Text>
-        <Text style={styles.meta}>
-          {snapshot?.agent.status ?? "…"}
-          {snapshot?.agent.model ? ` · ${snapshot.agent.model}` : ""}
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <View style={styles.topBar}>
+        <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
+          <IconGlyph label="‹" size={24} />
+        </CircleButton>
+        <Text style={styles.navTitle} numberOfLines={1}>
+          {snapshot?.agent.name ?? "Agent"}
         </Text>
+        <CircleButton accessibilityLabel="More">
+          <IconGlyph label="···" size={16} />
+        </CircleButton>
       </View>
 
-      {needsInput ? (
-        <View style={styles.needs}>
-          <Text style={styles.needsTitle}>Needs input</Text>
-          <Text style={styles.needsBody}>{needsInput.prompt}</Text>
-          <View style={styles.needsRow}>
-            <Pressable
-              style={styles.smallBtn}
-              onPress={() =>
-                void client
-                  ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: true })
-                  .then(() => setNeedsInput(null))
-              }
-            >
-              <Text style={styles.smallBtnText}>Approve</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.smallBtn, styles.danger]}
-              onPress={() =>
-                void client
-                  ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: false })
-                  .then(() => setNeedsInput(null))
-              }
-            >
-              <Text style={styles.smallBtnText}>Deny</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {snapshot?.artifacts?.length ? (
-        <View style={styles.artifacts}>
-          {snapshot.artifacts.map((a) => (
-            <Pressable
-              key={a.id}
-              onPress={() => {
-                const url = client?.artifactUrl(agentId!, a.id);
-                if (url) void Linking.openURL(`${url}?token=${encodeURIComponent(host!.token)}`);
-              }}
-            >
-              <Text style={styles.artifact}>📎 {a.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
       <FlatList
-        data={liveRows}
+        data={messages.filter((m) => m.role !== "system")}
         keyExtractor={(m) => m.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={
+          <View>
+            {assistantSummary ? (
+              <View style={styles.summary}>
+                <InlineCode text={assistantSummary.slice(0, 600)} />
+              </View>
+            ) : (
+              <Text style={styles.placeholderSummary}>Waiting for the agent to report…</Text>
+            )}
+
+            {needsInput ? (
+              <View style={styles.needsCard}>
+                <Text style={styles.needsTitle}>Needs Attention</Text>
+                <Text style={styles.needsBody}>{needsInput.prompt}</Text>
+                <View style={styles.needsRow}>
+                  <Pressable
+                    style={styles.actionPill}
+                    onPress={() =>
+                      void client
+                        ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: true })
+                        .then(() => setNeedsInput(null))
+                    }
+                  >
+                    <Text style={styles.actionPillText}>Approve</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.actionPill, styles.actionSecondary]}
+                    onPress={() =>
+                      void client
+                        ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: false })
+                        .then(() => setNeedsInput(null))
+                    }
+                  >
+                    <Text style={styles.actionPillText}>Deny</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {artifacts.length > 0 ? (
+              <View style={styles.changesCard}>
+                <Text style={styles.changesTitle}>Changes {artifacts.length}</Text>
+                {artifacts.map((a) => (
+                  <Pressable
+                    key={a.id}
+                    style={styles.fileRow}
+                    onPress={() => {
+                      const url = client?.artifactUrl(agentId!, a.id);
+                      if (url && host) {
+                        void Linking.openURL(`${url}?token=${encodeURIComponent(host.token)}`);
+                      }
+                    }}
+                  >
+                    <View style={styles.fileLeft}>
+                      <View style={styles.fileIcon}>
+                        <Text style={styles.fileIconText}>
+                          {a.name.endsWith(".ts") || a.name.endsWith(".tsx")
+                            ? "TS"
+                            : a.name.endsWith(".js")
+                              ? "JS"
+                              : "MD"}
+                        </Text>
+                      </View>
+                      <Text style={styles.fileName}>{a.name}</Text>
+                    </View>
+                    <Text style={styles.diff}>
+                      <Text style={{ color: colors.diffAdd }}>+{Math.max(1, Math.round(a.sizeBytes / 40))}</Text>
+                      {"  "}
+                      <Text style={{ color: colors.diffDel }}>-0</Text>
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            {Object.entries(streamingText).map(([id, text]) => (
+              <View key={id} style={styles.liveBubble}>
+                <Text style={styles.liveLabel}>Live</Text>
+                <Text style={styles.bodyText}>{text}</Text>
+              </View>
+            ))}
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Text style={styles.threadLabel}>Thread</Text>
+          </View>
+        }
         renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.role === "user" ? styles.user : styles.assistant,
-            ]}
-          >
-            <Text style={styles.role}>{item.role}{"live" in item && item.live ? " · live" : ""}</Text>
-            <Text style={styles.bubbleText}>{item.text}</Text>
+          <View style={[styles.msg, item.role === "user" ? styles.msgUser : styles.msgAssistant]}>
+            <Text style={styles.msgRole}>{item.role}</Text>
+            <Text style={styles.bodyText}>{item.text}</Text>
           </View>
         )}
       />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <View style={styles.composer}>
-        <TextInput
-          style={styles.input}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Follow up…"
-          placeholderTextColor={colors.muted}
-          multiline
-        />
-        <View style={styles.composerRow}>
-          <Pressable style={styles.smallBtn} onPress={() => void send("prompt")} disabled={sending}>
-            <Text style={styles.smallBtnText}>Send</Text>
-          </Pressable>
-          <Pressable style={styles.ghostBtn} onPress={() => void send("steer")} disabled={sending}>
-            <Text style={styles.ghostText}>Steer</Text>
-          </Pressable>
-          <Pressable style={styles.ghostBtn} onPress={() => void send("followUp")} disabled={sending}>
-            <Text style={styles.ghostText}>Queue</Text>
+      <View style={styles.bottomActions} pointerEvents="box-none">
+        <View style={styles.actionRow}>
+          <Pressable style={styles.actionPill}>
+            <Text style={styles.actionPillText}>↑ View details</Text>
           </Pressable>
           <Pressable
-            style={styles.ghostBtn}
+            style={[styles.actionPill, styles.actionSecondary]}
             onPress={() => void client?.cancel(agentId!).catch((e) => setError(String(e)))}
+            disabled={sending}
           >
-            <Text style={styles.ghostText}>Cancel</Text>
+            <Text style={styles.actionPillText}>Cancel</Text>
           </Pressable>
         </View>
       </View>
-    </View>
+
+      <PillComposer
+        value={draft}
+        onChangeText={setDraft}
+        onSubmit={() => void send()}
+        onPlus={() => undefined}
+        placeholder="Follow up..."
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  title: { color: colors.ink, fontSize: 20, fontWeight: "700" },
-  meta: { color: colors.muted, marginTop: 2 },
-  needs: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
-    backgroundColor: "#2A2410",
-    borderRadius: 10,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginTop: 4,
+    gap: 10,
   },
-  needsTitle: { color: "#F0C14A", fontWeight: "700" },
-  needsBody: { color: colors.ink, marginTop: 4 },
-  needsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
-  artifacts: { paddingHorizontal: 16, gap: 4 },
-  artifact: { color: colors.accent, marginBottom: 4 },
-  bubble: { borderRadius: 12, padding: 12, marginBottom: 8 },
-  user: { backgroundColor: colors.userBubble, alignSelf: "flex-end", maxWidth: "92%" },
-  assistant: { backgroundColor: colors.assistantBubble, alignSelf: "flex-start", maxWidth: "92%" },
-  role: { color: colors.muted, fontSize: 11, marginBottom: 4, textTransform: "uppercase" },
-  bubbleText: { color: colors.ink, fontSize: 15, lineHeight: 21 },
-  error: { color: colors.danger, paddingHorizontal: 16, marginBottom: 4 },
-  composer: {
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
-    padding: 12,
-    backgroundColor: colors.bgElevated,
-  },
-  input: {
+  navTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
     color: colors.ink,
-    minHeight: 40,
-    maxHeight: 120,
+  },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 160 },
+  summary: { marginBottom: 16 },
+  placeholderSummary: { color: colors.muted, marginBottom: 16 },
+  bodyText: { fontSize: 16, lineHeight: 24, color: colors.ink },
+  code: {
+    fontFamily: "Menlo",
+    backgroundColor: colors.codeBg,
+    overflow: "hidden",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    fontSize: 14,
+  },
+  needsCard: {
+    backgroundColor: "#FFF7ED",
+    borderRadius: radii.card,
+    padding: 14,
+    marginBottom: 14,
+  },
+  needsTitle: { fontWeight: "700", color: colors.needsAttention, marginBottom: 4 },
+  needsBody: { color: colors.ink, fontSize: 15 },
+  needsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  changesCard: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.card,
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  changesTitle: { fontSize: 17, fontWeight: "700", color: colors.ink, marginBottom: 8 },
+  fileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+  },
+  fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  fileIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: colors.codeBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fileIconText: { fontSize: 10, fontWeight: "700", color: colors.muted },
+  fileName: { fontSize: 15, color: colors.ink, flexShrink: 1 },
+  diff: { fontSize: 13, fontWeight: "600", marginLeft: 8 },
+  liveBubble: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  liveLabel: { color: colors.working, fontSize: 12, fontWeight: "600", marginBottom: 4 },
+  threadLabel: {
+    marginTop: 8,
     marginBottom: 8,
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
-  composerRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  smallBtn: {
-    backgroundColor: colors.accent,
+  msg: { borderRadius: 14, padding: 12, marginBottom: 8 },
+  msgUser: { backgroundColor: "#E8F1FF", alignSelf: "flex-end", maxWidth: "92%" },
+  msgAssistant: { backgroundColor: colors.bgElevated, alignSelf: "flex-start", maxWidth: "92%" },
+  msgRole: { fontSize: 11, color: colors.muted, marginBottom: 4, textTransform: "uppercase" },
+  error: { color: colors.danger, marginBottom: 8 },
+  bottomActions: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 86,
+  },
+  actionRow: { flexDirection: "row", gap: 8 },
+  actionPill: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.pill,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  smallBtnText: { color: "#042015", fontWeight: "700" },
-  danger: { backgroundColor: colors.danger },
-  ghostBtn: {
-    borderColor: colors.line,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  ghostText: { color: colors.ink, fontWeight: "600" },
+  actionSecondary: { opacity: 0.95 },
+  actionPillText: { fontSize: 14, fontWeight: "600", color: colors.ink },
 });

@@ -1,12 +1,16 @@
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { PairedHost } from "@prime-pocket/protocol";
 import { loadPairedHosts, removePairedHost, upsertPairedHost } from "../src/storage";
 import { reconnectPairedHost } from "../src/api";
-import { colors } from "../src/theme";
+import { colors, radii } from "../src/theme";
+import { CircleButton, IconGlyph } from "../src/components/CircleButton";
+import { WorkspaceRow } from "../src/components/WorkspaceRow";
 
 export default function HostsScreen() {
+  const router = useRouter();
   const [hosts, setHosts] = useState<PairedHost[]>([]);
 
   useFocusEffect(
@@ -26,18 +30,27 @@ export default function HostsScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.topBar}>
+        <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
+          <IconGlyph label="‹" size={24} />
+        </CircleButton>
+        <Text style={styles.title}>Workspaces</Text>
+        <CircleButton accessibilityLabel="Pair" onPress={() => router.push("/pair")}>
+          <IconGlyph label="＋" size={18} />
+        </CircleButton>
+      </View>
       <Text style={styles.help}>
         Hosts are stored on-device. Remote access uses Tailscale or LAN — Pocket does not run a relay.
       </Text>
       <FlatList
         data={hosts}
         keyExtractor={(h) => h.hostId}
-        contentContainerStyle={{ padding: 20 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
         ListEmptyComponent={<Text style={styles.empty}>No paired hosts.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.title}>{item.label}</Text>
+            <WorkspaceRow name={item.label} />
             <Text style={styles.meta}>{item.baseUrl}</Text>
             <Text style={styles.meta} numberOfLines={1}>
               fp {item.fingerprint.slice(0, 16)}…
@@ -56,31 +69,36 @@ export default function HostsScreen() {
           </View>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  help: { color: colors.muted, paddingHorizontal: 20, paddingTop: 12, lineHeight: 20 },
+  safe: { flex: 1, backgroundColor: colors.bg },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginTop: 4,
+  },
+  title: { fontSize: 17, fontWeight: "600", color: colors.ink },
+  help: { color: colors.muted, paddingHorizontal: 20, paddingTop: 12, lineHeight: 20, fontSize: 14 },
   empty: { color: colors.muted, textAlign: "center", marginTop: 40 },
   card: {
     backgroundColor: colors.bgElevated,
-    borderRadius: 12,
+    borderRadius: radii.card,
     padding: 14,
-    marginBottom: 12,
-    borderColor: colors.line,
-    borderWidth: 1,
+    marginTop: 12,
   },
-  title: { color: colors.ink, fontSize: 17, fontWeight: "600" },
-  meta: { color: colors.muted, marginTop: 4, fontSize: 12 },
+  meta: { color: colors.muted, marginTop: 2, fontSize: 12, paddingHorizontal: 4 },
   row: { flexDirection: "row", gap: 8, marginTop: 12 },
   btn: {
-    backgroundColor: colors.accentDim,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.codeBg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
   },
-  danger: { backgroundColor: "#5A2A24" },
+  danger: { backgroundColor: "#FFE5E5" },
   btnText: { color: colors.ink, fontWeight: "600" },
 });

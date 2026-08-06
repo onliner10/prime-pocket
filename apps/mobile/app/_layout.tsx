@@ -1,25 +1,27 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
   return (
-    <>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.bg },
-          headerTintColor: colors.ink,
-          headerTitleStyle: { fontWeight: "600" },
+          headerShown: false,
           contentStyle: { backgroundColor: colors.bg },
+          animation: "slide_from_right",
         }}
       >
-        <Stack.Screen name="index" options={{ title: "Fleet" }} />
-        <Stack.Screen name="pair" options={{ title: "Pair host", presentation: "modal" }} />
-        <Stack.Screen name="scan" options={{ title: "Scan QR", presentation: "modal" }} />
-        <Stack.Screen name="agent/[hostId]/[agentId]" options={{ title: "Agent" }} />
-        <Stack.Screen name="hosts" options={{ title: "Hosts" }} />
+        <Stack.Screen name="index" />
+        <Stack.Screen name="agents/index" />
+        <Stack.Screen name="agents/[filter]" />
+        <Stack.Screen name="pair" options={{ presentation: "modal" }} />
+        <Stack.Screen name="scan" options={{ presentation: "modal" }} />
+        <Stack.Screen name="agent/[hostId]/[agentId]" />
+        <Stack.Screen name="hosts" />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
