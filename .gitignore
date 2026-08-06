@@ -11,3 +11,5 @@ coverage/
 *.tsbuildinfo
 apps/mobile/.expo/
 apps/mobile/dist/
+apps/mobile/test-results/
+apps/mobile/playwright-report/
