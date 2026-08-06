@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { isImageMime, Routes, type MessageImage, type PairedHost } from "@prime-pocket/protocol";
 import { colors } from "../theme";
 
@@ -8,12 +8,13 @@ export function resolveImageUri(
   host: PairedHost | null,
   agentId?: string,
 ): string | null {
-  if (image.dataBase64) {
-    return `data:${image.mimeType};base64,${image.dataBase64}`;
-  }
+  // Prefer artifact download when available (avoids huge inline payloads / stale base64).
   if (image.artifactId && host && agentId) {
     const base = host.baseUrl.replace(/\/$/, "");
     return `${base}${Routes.agentArtifact(agentId, image.artifactId)}?token=${encodeURIComponent(host.token)}`;
+  }
+  if (image.dataBase64) {
+    return `data:${image.mimeType};base64,${image.dataBase64}`;
   }
   return null;
 }
@@ -31,7 +32,12 @@ export function MessageImages({
   return (
     <View style={styles.row}>
       {images.map((img, idx) => (
-        <AuthImage key={`${img.artifactId ?? img.name ?? idx}`} image={img} host={host} agentId={agentId} />
+        <AuthImage
+          key={`${img.artifactId ?? "inline"}-${img.name ?? "img"}-${idx}`}
+          image={img}
+          host={host}
+          agentId={agentId}
+        />
       ))}
     </View>
   );
@@ -58,14 +64,33 @@ function AuthImage({
   agentId?: string;
 }) {
   const uri = useMemo(() => resolveImageUri(image, host, agentId), [image, host, agentId]);
-  if (!uri) return null;
+  if (!isImageMime(image.mimeType)) {
+    return (
+      <View style={[styles.frame, styles.broken]}>
+        <Text style={styles.brokenText}>Unsupported</Text>
+      </View>
+    );
+  }
+  if (!uri) {
+    return (
+      <View style={[styles.frame, styles.broken]}>
+        <Text style={styles.brokenText}>Missing</Text>
+      </View>
+    );
+  }
   return <RemoteImage uri={uri} />;
 }
 
 function RemoteImage({ uri }: { uri: string }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  if (failed) return null;
+  if (failed) {
+    return (
+      <View style={[styles.frame, styles.broken]}>
+        <Text style={styles.brokenText}>Failed</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.frame}>
       {loading ? <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.muted} /> : null}
@@ -93,4 +118,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.codeBg,
   },
   image: { width: "100%", height: "100%" },
+  broken: { alignItems: "center", justifyContent: "center" },
+  brokenText: { color: colors.muted, fontSize: 12, fontWeight: "600" },
 });

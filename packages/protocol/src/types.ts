@@ -101,6 +101,7 @@ export interface ArtifactMeta {
   kind?: "image" | "file";
 }
 
+
 export interface AgentSnapshot {
   agent: AgentSummary;
   messages: TranscriptMessage[];
@@ -206,7 +207,3 @@ export type StreamServerMessage =
   | { type: "event"; event: AgentEvent }
   | { type: "pong" }
   | { type: "error"; message: string };
-
-export function isImageMime(mimeType: string): boolean {
-  return mimeType.startsWith("image/");
-}

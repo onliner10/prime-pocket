@@ -23,6 +23,8 @@ export function PillComposer({
   placeholder = "Plan, ask, build...",
   pendingImages = [],
   onRemoveImage,
+  sending = false,
+  imagesEnabled = true,
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -31,9 +33,11 @@ export function PillComposer({
   placeholder?: string;
   pendingImages?: PendingImage[];
   onRemoveImage?: (id: string) => void;
+  sending?: boolean;
+  imagesEnabled?: boolean;
 }) {
   const hasImages = pendingImages.length > 0;
-  const canSend = value.trim().length > 0 || hasImages;
+  const canSend = !sending && (value.trim().length > 0 || hasImages);
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
@@ -53,6 +57,7 @@ export function PillComposer({
                   style={styles.remove}
                   onPress={() => onRemoveImage?.(img.id)}
                   hitSlop={8}
+                  disabled={sending}
                 >
                   <Text style={styles.removeText}>✕</Text>
                 </Pressable>
@@ -67,16 +72,28 @@ export function PillComposer({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.muted2}
-          onSubmitEditing={onSubmit}
+          onSubmitEditing={() => {
+            if (canSend) onSubmit?.();
+          }}
           returnKeyType="send"
           multiline={hasImages}
           blurOnSubmit={!hasImages}
+          editable={!sending}
         />
 
         <View style={styles.toolbar}>
-          <Pressable accessibilityLabel="Add" onPress={onPlus} style={styles.plus}>
-            <IconGlyph label="+" size={22} color={colors.ink} />
-          </Pressable>
+          {imagesEnabled ? (
+            <Pressable
+              accessibilityLabel="Add"
+              onPress={onPlus}
+              style={styles.plus}
+              disabled={sending}
+            >
+              <IconGlyph label="+" size={22} color={colors.ink} />
+            </Pressable>
+          ) : (
+            <View style={styles.plusPlaceholder} />
+          )}
           <View style={styles.toolbarSpacer} />
           <Pressable
             accessibilityLabel="Send"
@@ -185,5 +202,9 @@ const styles = StyleSheet.create({
   },
   sendIdle: {
     backgroundColor: colors.codeBg,
+  },
+  plusPlaceholder: {
+    width: 40,
+    height: 40,
   },
 });

@@ -142,6 +142,13 @@ test("proof screenshots: both image directions", async ({ page }) => {
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "proof-01-mobile-to-agent.png") });
 
+  // Actually send image-only after clearing text to cover empty-message path
+  await page.getByPlaceholder("Follow up...").fill("");
+  await page.getByLabel("Send").click();
+  await expect(page.getByText("Shared image").first()).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: join(OUT, "proof-01b-mobile-sent.png") });
+
   // ========== 2) Agent → mobile ==========
   const launch = await fetch(`${BRIDGE}/v1/agents`, {
     method: "POST",

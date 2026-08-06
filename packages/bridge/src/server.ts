@@ -4,8 +4,11 @@ import { URL } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   BEARER_PREFIX,
+  MAX_HTTP_BODY_BYTES,
   Routes,
   encodePairingQr,
+  sanitizeArtifactFilename,
+  validatePromptImages,
   type AgentEvent,
   type AgentId,
   type ApiErrorBody,
@@ -34,10 +37,19 @@ export interface BridgeServerOptions {
   tls?: boolean;
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, maxBytes = MAX_HTTP_BODY_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c) => chunks.push(c));
+    let total = 0;
+    req.on("data", (c: Buffer) => {
+      total += c.length;
+      if (total > maxBytes) {
+        reject(Object.assign(new Error("Request body too large"), { code: "payload_too_large" }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
@@ -276,13 +288,46 @@ export class BridgeServer {
         }
 
         if (req.method === "POST" && rest === "prompt") {
-          const body = JSON.parse((await readBody(req)) || "{}") as PromptRequest;
+          let raw: string;
+          try {
+            raw = await readBody(req);
+          } catch (e) {
+            const code = (e as { code?: string }).code;
+            if (code === "payload_too_large") {
+              sendError(res, 413, "Request body too large", "payload_too_large");
+              return;
+            }
+            throw e;
+          }
+          const body = JSON.parse(raw || "{}") as PromptRequest;
           if (!body.message?.trim() && !(body.images?.length)) {
             sendError(res, 400, "message or images required", "bad_request");
             return;
           }
+          const validated = validatePromptImages(body.images);
+          if (!validated.ok) {
+            sendError(res, 400, validated.error, validated.code);
+            return;
+          }
+          if (validated.images.length && !this.backend.capabilities.images) {
+            sendError(res, 400, "Host does not support images", "images_unsupported");
+            return;
+          }
+          if (validated.images.length) {
+            body.images = validated.images.map((img) => ({
+              mimeType: img.mimeType,
+              dataBase64: img.dataBase64,
+              name: img.name,
+            }));
+          } else {
+            delete body.images;
+          }
           if (!body.message?.trim() && body.images?.length) {
             body.message = "Shared image(s)";
+          }
+          if (body.streamingBehavior === "steer" && body.images?.length) {
+            sendError(res, 400, "Images are not supported with steer; use followUp", "bad_request");
+            return;
           }
           await this.backend.prompt(agentId, body);
           sendJson(res, 200, { ok: true });
@@ -297,15 +342,42 @@ export class BridgeServer {
         }
 
         if (req.method === "POST" && rest === "follow-up") {
-          const body = JSON.parse((await readBody(req)) || "{}") as FollowUpRequest;
+          let raw: string;
+          try {
+            raw = await readBody(req);
+          } catch (e) {
+            const code = (e as { code?: string }).code;
+            if (code === "payload_too_large") {
+              sendError(res, 413, "Request body too large", "payload_too_large");
+              return;
+            }
+            throw e;
+          }
+          const body = JSON.parse(raw || "{}") as FollowUpRequest;
           if (!body.message?.trim() && !(body.images?.length)) {
             sendError(res, 400, "message or images required", "bad_request");
             return;
           }
-          if (!body.message?.trim() && body.images?.length) {
+          const validated = validatePromptImages(body.images);
+          if (!validated.ok) {
+            sendError(res, 400, validated.error, validated.code);
+            return;
+          }
+          if (validated.images.length && !this.backend.capabilities.images) {
+            sendError(res, 400, "Host does not support images", "images_unsupported");
+            return;
+          }
+          const images = validated.images.length
+            ? validated.images.map((img) => ({
+                mimeType: img.mimeType,
+                dataBase64: img.dataBase64,
+                name: img.name,
+              }))
+            : undefined;
+          if (!body.message?.trim() && images?.length) {
             body.message = "Shared image(s)";
           }
-          await this.backend.followUp(agentId, body.message, body.images);
+          await this.backend.followUp(agentId, body.message, images);
           sendJson(res, 200, { ok: true });
           return;
         }
@@ -331,10 +403,11 @@ export class BridgeServer {
             sendError(res, 404, "Artifact not found", "not_found");
             return;
           }
+          const safeName = sanitizeArtifactFilename(file.meta.name, "artifact.bin");
           res.writeHead(200, {
             "content-type": file.meta.mimeType,
             "content-length": file.body.length,
-            "content-disposition": `attachment; filename="${file.meta.name}"`,
+            "content-disposition": `attachment; filename="${safeName}"`,
             "access-control-allow-origin": "*",
           });
           res.end(file.body);

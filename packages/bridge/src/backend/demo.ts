@@ -6,6 +6,8 @@ import {
   initialCursor,
   isImageMime,
   nextCursor,
+  normalizeImageBase64,
+  sanitizeArtifactFilename,
   type AgentEvent,
   type AgentId,
   type AgentSnapshot,
@@ -102,12 +104,43 @@ export class DemoBackend implements AgentBackend {
   private readonly artifactRoot: string;
   private readonly agents = new Map<AgentId, MutableAgentState>();
   private readonly listeners = new Set<AgentEventListener>();
-  private readonly timers = new Set<NodeJS.Timeout>();
+  /** Timers scoped per agent so cancel on A doesn't abort B. */
+  private readonly timersByAgent = new Map<AgentId, Set<NodeJS.Timeout>>();
+  /** Follow-ups received while streaming; drained when the turn ends. */
+  private readonly queuedFollowUps = new Map<
+    AgentId,
+    Array<{ message: string; imageCount: number }>
+  >();
 
   constructor(hostId: HostId, artifactRoot: string) {
     this.hostId = hostId;
     this.artifactRoot = artifactRoot;
     this.seedDemoAgent();
+  }
+
+  private agentTimers(agentId: AgentId): Set<NodeJS.Timeout> {
+    let set = this.timersByAgent.get(agentId);
+    if (!set) {
+      set = new Set();
+      this.timersByAgent.set(agentId, set);
+    }
+    return set;
+  }
+
+  private clearAgentTimers(agentId: AgentId): void {
+    const set = this.timersByAgent.get(agentId);
+    if (!set) return;
+    for (const t of set) clearTimeout(t);
+    set.clear();
+  }
+
+  private schedule(agentId: AgentId, fn: () => void, ms: number): void {
+    const timers = this.agentTimers(agentId);
+    const t = setTimeout(() => {
+      timers.delete(t);
+      fn();
+    }, ms);
+    timers.add(t);
   }
 
   private seedDemoAgent(): void {
@@ -203,7 +236,12 @@ export class DemoBackend implements AgentBackend {
   async prompt(agentId: AgentId, req: PromptRequest): Promise<void> {
     const state = this.require(agentId);
     if (state.streaming) {
-      if (req.streamingBehavior === "steer") return this.steer(agentId, req.message);
+      if (req.streamingBehavior === "steer") {
+        if (req.images?.length) {
+          throw new Error("Images are not supported with steer; use followUp");
+        }
+        return this.steer(agentId, req.message);
+      }
       if (req.streamingBehavior === "followUp") {
         return this.followUp(agentId, req.message, req.images);
       }
@@ -228,13 +266,19 @@ export class DemoBackend implements AgentBackend {
     const state = this.require(agentId);
     const persisted = this.persistPromptImages(agentId, images ?? []);
     this.pushUser(state, agentId, `[follow-up] ${message}`, persisted);
-    if (!state.streaming) this.simulateReply(agentId, message, persisted.length);
+    if (state.streaming) {
+      const q = this.queuedFollowUps.get(agentId) ?? [];
+      q.push({ message, imageCount: persisted.length });
+      this.queuedFollowUps.set(agentId, q);
+      return;
+    }
+    this.simulateReply(agentId, message, persisted.length);
   }
 
   async cancel(agentId: AgentId): Promise<void> {
     const state = this.require(agentId);
-    for (const t of this.timers) clearTimeout(t);
-    this.timers.clear();
+    this.clearAgentTimers(agentId);
+    this.queuedFollowUps.delete(agentId);
     state.streaming = false;
     state.summary.status = "idle";
     this.advance(state);
@@ -274,8 +318,9 @@ export class DemoBackend implements AgentBackend {
   }
 
   async dispose(): Promise<void> {
-    for (const t of this.timers) clearTimeout(t);
-    this.timers.clear();
+    for (const agentId of this.timersByAgent.keys()) this.clearAgentTimers(agentId);
+    this.timersByAgent.clear();
+    this.queuedFollowUps.clear();
     this.listeners.clear();
   }
 
@@ -306,8 +351,10 @@ export class DemoBackend implements AgentBackend {
   ): MessageImage[] {
     const out: MessageImage[] = [];
     for (const img of images) {
-      if (!img.dataBase64 || !isImageMime(img.mimeType)) continue;
-      const body = Buffer.from(img.dataBase64, "base64");
+      if (!isImageMime(img.mimeType)) continue;
+      const b64 = normalizeImageBase64(img.dataBase64);
+      if (!b64) continue;
+      const body = Buffer.from(b64, "base64");
       if (!body.length) continue;
       const artifactId = id("art");
       const ext = img.mimeType.includes("png")
@@ -317,7 +364,10 @@ export class DemoBackend implements AgentBackend {
           : img.mimeType.includes("gif")
             ? "gif"
             : "jpg";
-      const name = img.name ?? `upload-${artifactId.slice(-6)}.${ext}`;
+      const name = sanitizeArtifactFilename(
+        img.name,
+        `upload-${artifactId.slice(-6)}.${ext}`,
+      );
       const meta = this.writeArtifact(agentId, artifactId, name, img.mimeType, body, "image");
       out.push({
         mimeType: img.mimeType,
@@ -349,8 +399,7 @@ export class DemoBackend implements AgentBackend {
           text,
           cursor: { ...current.cursor },
         });
-        const t = setTimeout(tick, 120);
-        this.timers.add(t);
+        this.schedule(agentId, tick, 120);
         return;
       }
       const full = chunks.join("");
@@ -385,9 +434,16 @@ export class DemoBackend implements AgentBackend {
       } else if (/artifact|log/i.test(userMessage) && !wantScreenshot) {
         this.addDemoArtifact(agentId);
       }
+
+      // Drain one queued follow-up (with images) after the turn completes.
+      const q = this.queuedFollowUps.get(agentId);
+      if (q?.length) {
+        const next = q.shift()!;
+        if (!q.length) this.queuedFollowUps.delete(agentId);
+        this.schedule(agentId, () => this.simulateReply(agentId, next.message, next.imageCount), 40);
+      }
     };
-    const t = setTimeout(tick, 80);
-    this.timers.add(t);
+    this.schedule(agentId, tick, 80);
   }
 
   private planReply(userMessage: string, inboundImageCount: number, wantScreenshot: boolean): string[] {

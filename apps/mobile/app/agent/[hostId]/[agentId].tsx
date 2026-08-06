@@ -55,8 +55,10 @@ export default function AgentScreen() {
   const [needsInput, setNeedsInput] = useState<{ requestId: string; prompt: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [imagesEnabled, setImagesEnabled] = useState(true);
   const streamRef = useRef<{ close: () => void } | null>(null);
   const deltasRef = useRef<Record<string, string>>({});
+  const sendingRef = useRef(false);
 
   // Web e2e / Playwright hook to seed composer image previews without a native picker.
   useEffect(() => {
@@ -142,6 +144,10 @@ export default function AgentScreen() {
       onMessage: applyServerMessage,
       onError: () => setError("Stream disconnected — reopen to reconnect"),
     });
+    void client
+      .getHost()
+      .then((info) => setImagesEnabled(info.capabilities.images !== false))
+      .catch(() => setImagesEnabled(true));
     return () => {
       streamRef.current?.close();
       streamRef.current = null;
@@ -150,32 +156,38 @@ export default function AgentScreen() {
 
   async function send() {
     if (!client || !agentId) return;
+    if (sendingRef.current) return;
     if (!draft.trim() && pendingImages.length === 0) return;
+    const imagesSnapshot = pendingImages.slice();
+    const textSnapshot = draft.trim() || (imagesSnapshot.length ? "Shared image(s)" : "");
+    sendingRef.current = true;
     setSending(true);
     setError(null);
     try {
       await client.prompt(agentId, {
-        message: draft.trim() || (pendingImages.length ? "Shared image(s)" : ""),
+        message: textSnapshot,
         streamingBehavior: snapshot?.streaming ? "followUp" : undefined,
-        images: pendingImages.map((img) => ({
+        images: imagesSnapshot.map((img) => ({
           mimeType: img.mimeType,
           dataBase64: img.dataBase64,
           name: img.name,
         })),
       });
       setDraft("");
-      setPendingImages([]);
+      setPendingImages((prev) => prev.filter((p) => !imagesSnapshot.some((s) => s.id === p.id)));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
 
   async function onAttach() {
+    if (!imagesEnabled || sendingRef.current) return;
     try {
       const picked = await pickImages();
-      if (picked.length) setPendingImages((prev) => [...prev, ...picked]);
+      if (picked.length) setPendingImages((prev) => [...prev, ...picked].slice(0, 8));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -336,6 +348,8 @@ export default function AgentScreen() {
           pendingImages={pendingImages}
           onRemoveImage={(id) => setPendingImages((prev) => prev.filter((p) => p.id !== id))}
           placeholder="Follow up..."
+          sending={sending}
+          imagesEnabled={imagesEnabled}
         />
       </View>
     </SafeAreaView>

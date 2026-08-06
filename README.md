@@ -53,6 +53,10 @@ Optional user tunnel (Cloudflare Tunnel, ngrok): put that public URL into the ap
 
 - **Phone → agent:** tap **+** in the composer, pick photos, send with your follow-up. Images are uploaded in the prompt payload and stored as artifacts on the bridge.
 - **Agent → phone:** image artifacts and message attachments render inline in the thread (demo returns a PNG when you ask for a screenshot / image).
+- Image-only prompts are allowed (empty text → `Shared image(s)`).
+- Limits: up to **8** images per prompt, **8 MB** decoded each, **24 MB** HTTP body. Allowlist: `png` / `jpeg` / `webp` / `gif` (no SVG). Filenames are sanitized for `Content-Disposition`.
+- Mid-stream follow-ups with images are queued and answered after the current turn (demo). Steer + images is rejected.
+- Live Prime daemon mode does not advertise `images` until artifact download is wired.
 
 Authenticated artifact URLs use `?token=` so `<Image>` can load previews without custom headers.
 

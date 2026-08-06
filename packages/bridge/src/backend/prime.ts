@@ -57,7 +57,7 @@ export class PrimeDaemonBackend implements AgentBackend {
     cancel: true,
     artifacts: true,
     launch: true,
-    images: true,
+    images: false, // artifact download not wired through daemon yet
     demoMode: false,
   };
 
