@@ -93,7 +93,24 @@ export class BridgeStore {
     writeFileSync(storePath(this.dataDir), JSON.stringify(this.data, null, 2));
   }
 
+  /** Reload mutable pairing/auth fields from disk so CLI `pair-code` works while bridge runs. */
+  reloadAuthFromDisk(): void {
+    const path = storePath(this.dataDir);
+    if (!existsSync(path)) return;
+    try {
+      const onDisk = JSON.parse(readFileSync(path, "utf8")) as BridgeStoreData;
+      this.data.pairCode = onDisk.pairCode;
+      this.data.pairCodeExpiresAt = onDisk.pairCodeExpiresAt;
+      this.data.tokens = onDisk.tokens ?? this.data.tokens;
+      this.data.ntfyTopic = onDisk.ntfyTopic;
+      this.data.ntfyServer = onDisk.ntfyServer;
+    } catch {
+      // keep in-memory state if disk is temporarily unreadable
+    }
+  }
+
   rotatePairCode(ttlMs = 15 * 60_000): string {
+    this.reloadAuthFromDisk();
     this.data.pairCode = randomBytes(4).toString("hex");
     this.data.pairCodeExpiresAt = new Date(Date.now() + ttlMs).toISOString();
     this.save();
@@ -101,11 +118,13 @@ export class BridgeStore {
   }
 
   pairCodeValid(code: string): boolean {
+    this.reloadAuthFromDisk();
     if (code !== this.data.pairCode) return false;
     return Date.now() <= Date.parse(this.data.pairCodeExpiresAt);
   }
 
   issueToken(deviceLabel: string): string {
+    this.reloadAuthFromDisk();
     const token = `pp_${randomBytes(24).toString("base64url")}`;
     this.data.tokens.push({
       token,
@@ -113,12 +132,14 @@ export class BridgeStore {
       createdAt: new Date().toISOString(),
     });
     // One-time pair code; rotate after successful pair
-    this.rotatePairCode();
+    this.data.pairCode = randomBytes(4).toString("hex");
+    this.data.pairCodeExpiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
     this.save();
     return token;
   }
 
   revokeToken(token: string): boolean {
+    this.reloadAuthFromDisk();
     const before = this.data.tokens.length;
     this.data.tokens = this.data.tokens.filter((t) => t.token !== token);
     this.save();
@@ -127,6 +148,7 @@ export class BridgeStore {
 
   authorize(bearer: string | undefined): boolean {
     if (!bearer) return false;
+    this.reloadAuthFromDisk();
     return this.data.tokens.some((t) => t.token === bearer);
   }
 

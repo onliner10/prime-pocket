@@ -45,7 +45,14 @@ export default function PairScreen() {
       await upsertPairedHost(paired);
       router.replace("/");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/invalid or expired pair code/i.test(msg) || /pair_invalid/i.test(msg)) {
+        setError(
+          "Invalid or expired pair code. On the desktop run `prime-pocket pair-code` (or restart the bridge) and paste the new QR/deep link.",
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusy(false);
     }

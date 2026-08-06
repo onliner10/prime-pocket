@@ -75,7 +75,9 @@ export async function pairWithHost(
   });
   const data = await parseJson<PairResponse>(res);
   if (opts?.fingerprint && data.host.fingerprint !== opts.fingerprint) {
-    throw new Error("TLS fingerprint mismatch — aborting pair");
+    throw new Error(
+      `TLS fingerprint mismatch (expected ${opts.fingerprint.slice(0, 12)}…, got ${data.host.fingerprint.slice(0, 12)}…). Aborting pair.`,
+    );
   }
   return data;
 }

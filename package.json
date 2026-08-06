@@ -9,9 +9,15 @@
     "dev:bridge": "pnpm --filter @prime-pocket/bridge dev",
     "start:bridge": "pnpm --filter @prime-pocket/bridge start",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test"
+    "test": "pnpm -r run test",
+    "e2e": "pnpm --filter @prime-pocket/bridge run e2e"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "ws": "^8.18.0"
   }
 }

@@ -13,6 +13,8 @@
     "test": "echo 'no mobile unit tests yet'"
   },
   "dependencies": {
+    "@babel/runtime": "^7.26.0",
+    "@expo/metro-runtime": "^4.0.1",
     "@prime-pocket/protocol": "workspace:*",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-navigation/native": "^7.0.14",
