@@ -58,6 +58,18 @@ export default function AgentScreen() {
   const streamRef = useRef<{ close: () => void } | null>(null);
   const deltasRef = useRef<Record<string, string>>({});
 
+  // Web e2e / Playwright hook to seed composer image previews without a native picker.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      __pocketSetPendingImages?: (imgs: PendingImage[]) => void;
+    };
+    w.__pocketSetPendingImages = setPendingImages;
+    return () => {
+      delete w.__pocketSetPendingImages;
+    };
+  }, []);
+
   const client = useMemo(() => (host ? new PocketHostClient(host) : null), [host]);
 
   const applyServerMessage = useCallback((msg: StreamServerMessage) => {
