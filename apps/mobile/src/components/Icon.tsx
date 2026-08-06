@@ -17,8 +17,7 @@ export type IconName =
   | "arrowUp"
   | "close"
   | "filter"
-  | "more"
-  | "sparkle";
+  | "more";
 
 type Draw = (color: string, sw: number) => ReactNode;
 
@@ -50,11 +49,11 @@ const ICONS: Record<IconName, Draw> = {
       strokeWidth={sw}
     />
   ),
-  // Two arrows meeting in the middle — "everything, gathered".
+  // Arrows drawing inward from opposite corners — "every agent, one place".
   converge: (c, sw) => (
     <>
-      <Path d="M2.5 12h6.2M6 8.6 9.4 12 6 15.4" stroke={c} strokeWidth={sw} />
-      <Path d="M21.5 12h-6.2M18 8.6 14.6 12 18 15.4" stroke={c} strokeWidth={sw} />
+      <Path d="M19.9 10.1h-6v-6M20.7 3.3l-6.8 6.8" stroke={c} strokeWidth={sw} />
+      <Path d="M4.1 13.9h6v6M3.3 20.7l6.8-6.8" stroke={c} strokeWidth={sw} />
     </>
   ),
   crosshair: (c, sw) => (
@@ -102,13 +101,6 @@ const ICONS: Record<IconName, Draw> = {
       <Circle cx={12} cy={12} r={1.35} fill={c} />
       <Circle cx={18.6} cy={12} r={1.35} fill={c} />
     </>
-  ),
-  sparkle: (c, sw) => (
-    <Path
-      d="M12 3.2l1.7 4.6a3 3 0 0 0 1.8 1.8l4.6 1.7-4.6 1.7a3 3 0 0 0-1.8 1.8L12 19.4l-1.7-4.6a3 3 0 0 0-1.8-1.8L3.9 11.3l4.6-1.7a3 3 0 0 0 1.8-1.8Z"
-      stroke={c}
-      strokeWidth={sw}
-    />
   ),
 };
 

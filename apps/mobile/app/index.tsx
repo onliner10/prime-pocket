@@ -21,14 +21,6 @@ import { StatusCard } from "../src/components/StatusCard";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
 import { PillComposer } from "../src/components/PillComposer";
 
-function hostHint(host: PairedHost): string {
-  try {
-    return new URL(host.baseUrl).host;
-  } catch {
-    return host.baseUrl;
-  }
-}
-
 export default function InboxScreen() {
   const router = useRouter();
   const [hosts, setHosts] = useState<PairedHost[]>([]);
@@ -166,12 +158,7 @@ export default function InboxScreen() {
         ) : (
           <View style={styles.workspaces}>
             {hosts.map((h) => (
-              <WorkspaceRow
-                key={h.hostId}
-                name={h.label}
-                meta={hostHint(h)}
-                onPress={() => router.push("/hosts")}
-              />
+              <WorkspaceRow key={h.hostId} name={h.label} onPress={() => router.push("/hosts")} />
             ))}
           </View>
         )}
@@ -202,8 +189,8 @@ const styles = StyleSheet.create({
   },
   topRight: { flexDirection: "row", gap: 10 },
   avatar: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: radii.circle,
     backgroundColor: colors.ink,
     alignItems: "center",
@@ -213,7 +200,7 @@ const styles = StyleSheet.create({
     fontFamily: type.cardLabel.fontFamily,
     color: "#fff",
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: 16,
     letterSpacing: -0.2,
   },
   inboxTitle: { ...type.display, marginTop: 18, marginBottom: 20 },
@@ -232,12 +219,12 @@ const styles = StyleSheet.create({
   emptyCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 13,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.row,
     paddingVertical: 13,
-    paddingLeft: 13,
-    paddingRight: 15,
+    paddingLeft: 14,
+    paddingRight: 16,
     ...shadows.row,
   },
   emptyIcon: {

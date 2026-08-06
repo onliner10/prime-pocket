@@ -98,11 +98,11 @@ export default function AgentsFilterScreen() {
 
       <View style={styles.heading}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>
-          {filtered.length === 0
-            ? "Nothing here"
-            : `${filtered.length} ${filtered.length === 1 ? "agent" : "agents"}`}
-        </Text>
+        {filtered.length > 0 ? (
+          <Text style={styles.subtitle}>
+            {filtered.length} {filtered.length === 1 ? "agent" : "agents"}
+          </Text>
+        ) : null}
       </View>
 
       <FlatList

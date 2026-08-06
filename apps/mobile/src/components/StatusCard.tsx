@@ -23,7 +23,7 @@ export function StatusCard({
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.iconRow}>
-        <Icon name={icon} size={23} color={accent} strokeWidth={1.9} />
+        <Icon name={icon} size={25} color={accent} strokeWidth={2} />
       </View>
       <Text style={styles.title} numberOfLines={2}>
         {title}
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   pressed: { opacity: 0.7 },
-  iconRow: { height: 24, justifyContent: "center" },
+  iconRow: { height: 25, justifyContent: "center" },
   title: { ...type.cardLabel, marginTop: 22 },
-  count: { color: colors.muted2, fontWeight: "500" },
+  count: { color: colors.muted, fontWeight: "500" },
 });
