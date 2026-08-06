@@ -5,8 +5,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { PairedHost } from "@prime-pocket/protocol";
 import { loadPairedHosts, removePairedHost, upsertPairedHost } from "../src/storage";
 import { reconnectPairedHost } from "../src/api";
-import { colors, radii } from "../src/theme";
-import { CircleButton, IconGlyph } from "../src/components/CircleButton";
+import { colors, fonts, radii, shadows, space, type } from "../src/theme";
+import { CircleButton } from "../src/components/CircleButton";
+import { Icon } from "../src/components/Icon";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
 
 export default function HostsScreen() {
@@ -33,11 +34,11 @@ export default function HostsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.topBar}>
         <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <IconGlyph label="‹" size={24} />
+          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
         </CircleButton>
         <Text style={styles.title}>Workspaces</Text>
         <CircleButton accessibilityLabel="Pair" onPress={() => router.push("/pair")}>
-          <IconGlyph label="＋" size={18} />
+          <Icon name="folderPlus" size={19} color={colors.ink} strokeWidth={1.75} />
         </CircleButton>
       </View>
       <Text style={styles.help}>
@@ -46,11 +47,12 @@ export default function HostsScreen() {
       <FlatList
         data={hosts}
         keyExtractor={(h) => h.hostId}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={<Text style={styles.empty}>No paired hosts.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <WorkspaceRow name={item.label} />
+            <WorkspaceRow name={item.label} variant="plain" />
             <Text style={styles.meta}>{item.baseUrl}</Text>
             <Text style={styles.meta} numberOfLines={1}>
               fp {item.fingerprint.slice(0, 16)}…
@@ -79,26 +81,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 4,
+    paddingHorizontal: space.gutter,
+    marginTop: 6,
   },
-  title: { fontSize: 17, fontWeight: "600", color: colors.ink },
-  help: { color: colors.muted, paddingHorizontal: 20, paddingTop: 12, lineHeight: 20, fontSize: 14 },
-  empty: { color: colors.muted, textAlign: "center", marginTop: 40 },
+  title: type.navTitle,
+  help: { ...type.body, color: colors.muted, paddingHorizontal: space.gutter, paddingTop: 14 },
+  list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  empty: { ...type.body, color: colors.muted, textAlign: "center", marginTop: 40 },
   card: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
     padding: 14,
     marginTop: 12,
+    ...shadows.row,
   },
-  meta: { color: colors.muted, marginTop: 2, fontSize: 12, paddingHorizontal: 4 },
-  row: { flexDirection: "row", gap: 8, marginTop: 12 },
+  meta: {
+    fontFamily: fonts.mono,
+    color: colors.muted,
+    marginTop: 3,
+    fontSize: 11,
+    paddingHorizontal: 4,
+  },
+  row: { flexDirection: "row", gap: 8, marginTop: 14 },
   btn: {
-    backgroundColor: colors.codeBg,
-    paddingHorizontal: 14,
+    backgroundColor: colors.chip,
+    paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: radii.pill,
   },
-  danger: { backgroundColor: "#FFE5E5" },
-  btnText: { color: colors.ink, fontWeight: "600" },
+  danger: { backgroundColor: "#FFEBEA" },
+  btnText: { ...type.meta, fontSize: 14, fontWeight: "600", color: colors.ink, letterSpacing: -0.2 },
 });

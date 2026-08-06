@@ -1,20 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
 import { listFleetAgents } from "../../src/api";
 import { loadPairedHosts } from "../../src/storage";
-import { filterAgents, statusLabel, type InboxFilter } from "../../src/inbox";
-import { colors, radii } from "../../src/theme";
-import { CircleButton, IconGlyph } from "../../src/components/CircleButton";
+import { filterAgents, statusAccent, statusLabel, type InboxFilter } from "../../src/inbox";
+import { colors, radii, shadows, space, type } from "../../src/theme";
+import { CircleButton } from "../../src/components/CircleButton";
+import { Icon, type IconName } from "../../src/components/Icon";
 import { PillComposer } from "../../src/components/PillComposer";
 
 const TITLES: Record<InboxFilter, string> = {
@@ -24,30 +18,39 @@ const TITLES: Record<InboxFilter, string> = {
   in_review: "In Review",
 };
 
-const EMPTY: Record<InboxFilter, { title: string; body: string }> = {
+const EMPTY: Record<InboxFilter, { title: string; body: string; icon: IconName; accent: string }> = {
   all: {
     title: "No Agents Yet",
     body: "Pair a workspace and launch an agent to see it here.",
+    icon: "converge",
+    accent: colors.allAgents,
   },
   working: {
     title: "Nothing Working",
     body: "Agents currently running appear here.",
+    icon: "crosshair",
+    accent: colors.working,
   },
   needs_attention: {
     title: "Nothing Needs Attention",
     body: "Agents waiting on your response or review appear here.",
+    icon: "bell",
+    accent: colors.needsAttention,
   },
   in_review: {
     title: "Nothing In Review",
     body: "Idle agents ready for you to review appear here.",
+    icon: "checkCircle",
+    accent: colors.inReview,
   },
 };
 
 export default function AgentsFilterScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ filter?: string }>();
-  const filter = (params.filter ?? "all") as InboxFilter;
-  const title = TITLES[filter] ?? "Agents";
+  const raw = (params.filter ?? "all") as InboxFilter;
+  const filter: InboxFilter = raw in TITLES ? raw : "all";
+  const title = TITLES[filter];
 
   const [hosts, setHosts] = useState<PairedHost[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
@@ -74,44 +77,61 @@ export default function AgentsFilterScreen() {
     }, [refresh]),
   );
 
-  const filtered = useMemo(() => filterAgents(agents, filter in TITLES ? filter : "all"), [agents, filter]);
-  const empty = EMPTY[filter in TITLES ? filter : "all"];
+  const filtered = useMemo(() => filterAgents(agents, filter), [agents, filter]);
+  const empty = EMPTY[filter];
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.topBar}>
         <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <IconGlyph label="‹" size={24} />
+          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
         </CircleButton>
         <View style={styles.topRight}>
           <CircleButton accessibilityLabel="Search">
-            <IconGlyph label="⌕" size={18} />
+            <Icon name="search" size={19} color={colors.ink} strokeWidth={1.9} />
           </CircleButton>
           <CircleButton accessibilityLabel="Filter">
-            <IconGlyph label="☰" size={16} />
+            <Icon name="filter" size={19} color={colors.ink} strokeWidth={1.9} />
           </CircleButton>
         </View>
       </View>
-      <Text style={styles.title}>{title}</Text>
+
+      <View style={styles.heading}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>
+          {filtered.length === 0
+            ? "Nothing here"
+            : `${filtered.length} ${filtered.length === 1 ? "agent" : "agents"}`}
+        </Text>
+      </View>
 
       <FlatList
         data={filtered}
         keyExtractor={(a) => `${a.hostId}:${a.id}`}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => void refresh()} tintColor={colors.muted} />
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => void refresh()}
+            tintColor={colors.muted}
+          />
         }
         contentContainerStyle={filtered.length === 0 ? styles.emptyWrap : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: empty.accent + "14" }]}>
+              <Icon name={empty.icon} size={26} color={empty.accent} strokeWidth={1.8} />
+            </View>
             <Text style={styles.emptyTitle}>{empty.title}</Text>
             <Text style={styles.emptyBody}>{empty.body}</Text>
           </View>
         }
         renderItem={({ item }) => {
           const host = hosts.find((h) => h.hostId === item.hostId)?.label ?? "Workspace";
+          const accent = statusAccent(item.status);
           return (
             <Pressable
-              style={styles.row}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               onPress={() =>
                 router.push({
                   pathname: "/agent/[hostId]/[agentId]",
@@ -123,7 +143,10 @@ export default function AgentsFilterScreen() {
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.badge}>{statusLabel(item.status)}</Text>
+                <View style={styles.badge}>
+                  <View style={[styles.dot, { backgroundColor: accent }]} />
+                  <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
+                </View>
               </View>
               <Text style={styles.meta}>{host}</Text>
               {item.preview ? (
@@ -136,7 +159,7 @@ export default function AgentsFilterScreen() {
         }}
       />
 
-      <View style={styles.composerDock}>
+      <View style={styles.composerDock} pointerEvents="box-none">
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -157,49 +180,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginTop: 4,
+    paddingHorizontal: space.gutter,
+    marginTop: 6,
   },
   topRight: { flexDirection: "row", gap: 10 },
-  title: {
-    fontSize: 34,
-    fontWeight: "700",
-    color: colors.ink,
-    letterSpacing: -0.6,
-    paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 8,
+  heading: { paddingHorizontal: space.gutter, marginTop: 18, marginBottom: 16 },
+  title: type.display,
+  subtitle: { ...type.meta, marginTop: 2 },
+  list: { paddingHorizontal: space.gutter, paddingBottom: 130, gap: 10 },
+  emptyWrap: { flexGrow: 1, justifyContent: "center", paddingBottom: 130 },
+  empty: { alignItems: "center", paddingHorizontal: 40 },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
-  list: { paddingHorizontal: 16, paddingBottom: 120 },
-  emptyWrap: { flexGrow: 1, justifyContent: "center", paddingBottom: 120 },
-  empty: { alignItems: "center", paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 20, fontWeight: "600", color: colors.ink, textAlign: "center" },
-  emptyBody: {
-    marginTop: 8,
-    fontSize: 15,
-    color: colors.muted,
-    textAlign: "center",
-    lineHeight: 21,
-  },
+  emptyTitle: { ...type.title, textAlign: "center" },
+  emptyBody: { ...type.body, color: colors.muted, textAlign: "center", marginTop: 6 },
   row: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    ...shadows.row,
   },
-  rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
-  rowTitle: { flex: 1, fontSize: 17, fontWeight: "600", color: colors.ink },
-  badge: { fontSize: 13, color: colors.muted, fontWeight: "500" },
-  meta: { marginTop: 4, color: colors.muted, fontSize: 13 },
-  preview: { marginTop: 8, color: colors.ink, fontSize: 14, lineHeight: 20 },
-  composerDock: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 18,
-  },
+  pressed: { opacity: 0.7 },
+  rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  rowTitle: { ...type.cardLabel, flex: 1, fontSize: 16 },
+  badge: { flexDirection: "row", alignItems: "center", gap: 6 },
+  dot: { width: 7, height: 7, borderRadius: radii.circle },
+  badgeText: { ...type.meta, fontSize: 12 },
+  meta: { ...type.meta, fontSize: 12, fontWeight: "400", marginTop: 3 },
+  preview: { ...type.body, fontSize: 14, color: colors.ink2, marginTop: 9 },
+  composerDock: { position: "absolute", left: 16, right: 16, bottom: 18 },
 });

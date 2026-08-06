@@ -13,8 +13,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
 import { upsertPairedHost } from "../src/storage";
-import { colors, radii } from "../src/theme";
-import { CircleButton, IconGlyph } from "../src/components/CircleButton";
+import { colors, fonts, radii, space, type } from "../src/theme";
+import { CircleButton } from "../src/components/CircleButton";
+import { Icon } from "../src/components/Icon";
 
 export default function PairScreen() {
   const router = useRouter();
@@ -86,10 +87,10 @@ export default function PairScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.topBar}>
         <CircleButton accessibilityLabel="Close" onPress={() => router.back()}>
-          <IconGlyph label="✕" size={14} />
+          <Icon name="close" size={16} color={colors.ink} strokeWidth={2.1} />
         </CircleButton>
         <Text style={styles.navTitle}>Pair host</Text>
-        <View style={{ width: 36 }} />
+        <View style={{ width: 38 }} />
       </View>
 
       <View style={styles.body}>
@@ -165,42 +166,54 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 4,
+    paddingHorizontal: space.gutter,
+    marginTop: 6,
   },
-  navTitle: { fontSize: 17, fontWeight: "600", color: colors.ink },
-  body: { padding: 20 },
-  lead: { color: colors.muted, marginBottom: 16, lineHeight: 20, fontSize: 14 },
+  navTitle: type.navTitle,
+  body: { padding: space.gutter },
+  lead: { ...type.body, color: colors.muted, marginBottom: 18 },
   mono: {
     color: colors.ink,
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontFamily: fonts.mono,
+    fontSize: 13,
     backgroundColor: colors.codeBg,
   },
-  label: { color: colors.muted, marginBottom: 6, marginTop: 8, fontWeight: "600", fontSize: 13 },
+  label: { ...type.meta, fontSize: 13, marginBottom: 7, marginTop: 10, fontWeight: "600" },
   input: {
+    ...type.input,
     backgroundColor: colors.bgElevated,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.ink,
+    paddingVertical: 13,
     marginBottom: 10,
-    fontSize: 16,
   },
   multiline: { minHeight: 90, textAlignVertical: "top" },
   primary: {
     backgroundColor: colors.ink,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: radii.pill,
     alignItems: "center",
   },
-  primaryText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  primaryText: {
+    fontFamily: fonts.sans,
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
   secondary: {
     marginTop: 10,
     backgroundColor: colors.bgElevated,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: radii.pill,
     alignItems: "center",
   },
-  secondaryText: { color: colors.ink, fontWeight: "600", fontSize: 15 },
-  error: { color: colors.danger, marginTop: 14, lineHeight: 20 },
+  secondaryText: {
+    fontFamily: fonts.sans,
+    color: colors.ink,
+    fontWeight: "600",
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  error: { ...type.body, color: colors.danger, marginTop: 14 },
 });

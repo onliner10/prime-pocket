@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radii } from "../theme";
+import { colors, radii, shadows, type } from "../theme";
+import { Icon, type IconName } from "./Icon";
 
 export function StatusCard({
   title,
@@ -10,23 +11,23 @@ export function StatusCard({
 }: {
   title: string;
   count?: number | string;
-  icon: string;
+  icon: IconName;
   accent: string;
   onPress?: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <View style={[styles.iconWrap, { backgroundColor: accent + "18" }]}>
-        <Text style={[styles.icon, { color: accent }]}>{icon}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={count === undefined ? title : `${title} ${count}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+    >
+      <View style={styles.iconRow}>
+        <Icon name={icon} size={23} color={accent} strokeWidth={1.9} />
       </View>
       <Text style={styles.title} numberOfLines={2}>
         {title}
-        {count !== undefined ? (
-          <Text style={styles.count}>
-            {" "}
-            {count}
-          </Text>
-        ) : null}
+        {count !== undefined ? <Text style={styles.count}> {count}</Text> : null}
       </Text>
     </Pressable>
   );
@@ -35,34 +36,17 @@ export function StatusCard({
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minHeight: 112,
+    minHeight: 108,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingTop: 15,
+    paddingBottom: 16,
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    ...shadows.card,
   },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  icon: { fontSize: 18, fontWeight: "700" },
-  title: {
-    marginTop: 18,
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.ink,
-    lineHeight: 20,
-  },
-  count: {
-    color: colors.muted,
-    fontWeight: "500",
-  },
+  pressed: { opacity: 0.7 },
+  iconRow: { height: 24, justifyContent: "center" },
+  title: { ...type.cardLabel, marginTop: 22 },
+  count: { color: colors.muted2, fontWeight: "500" },
 });

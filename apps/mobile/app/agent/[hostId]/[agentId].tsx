@@ -20,8 +20,9 @@ import {
 } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../../src/api";
 import { loadPairedHosts } from "../../../src/storage";
-import { colors, radii } from "../../../src/theme";
-import { CircleButton, IconGlyph } from "../../../src/components/CircleButton";
+import { colors, fonts, radii, shadows, space, type } from "../../../src/theme";
+import { CircleButton } from "../../../src/components/CircleButton";
+import { Icon } from "../../../src/components/Icon";
 import { PillComposer, type PendingImage } from "../../../src/components/PillComposer";
 import { ArtifactImage, MessageImages } from "../../../src/components/MessageImages";
 import { pickImages } from "../../../src/pickImages";
@@ -208,13 +209,13 @@ export default function AgentScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.topBar}>
         <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <IconGlyph label="‹" size={24} />
+          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
         </CircleButton>
         <Text style={styles.navTitle} numberOfLines={1}>
           {snapshot?.agent.name ?? "Agent"}
         </Text>
         <CircleButton accessibilityLabel="More">
-          <IconGlyph label="···" size={16} />
+          <Icon name="more" size={19} color={colors.ink} />
         </CircleButton>
       </View>
 
@@ -238,17 +239,17 @@ export default function AgentScreen() {
                 <Text style={styles.needsBody}>{needsInput.prompt}</Text>
                 <View style={styles.needsRow}>
                   <Pressable
-                    style={styles.actionPill}
+                    style={[styles.replyPill, styles.replyPrimary]}
                     onPress={() =>
                       void client
                         ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: true })
                         .then(() => setNeedsInput(null))
                     }
                   >
-                    <Text style={styles.actionPillText}>Approve</Text>
+                    <Text style={[styles.actionPillText, styles.replyPrimaryText]}>Approve</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.actionPill, styles.actionSecondary]}
+                    style={styles.replyPill}
                     onPress={() =>
                       void client
                         ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: false })
@@ -329,10 +330,11 @@ export default function AgentScreen() {
       <View style={styles.bottomDock} pointerEvents="box-none">
         <View style={styles.actionRow}>
           <Pressable style={styles.actionPill}>
-            <Text style={styles.actionPillText}>↑ View details</Text>
+            <Icon name="arrowUp" size={15} color={colors.ink} strokeWidth={2.1} />
+            <Text style={styles.actionPillText}>View details</Text>
           </Pressable>
           <Pressable
-            style={[styles.actionPill, styles.actionSecondary]}
+            style={styles.actionPill}
             onPress={() => void client?.cancel(agentId!).catch((e) => setError(String(e)))}
             disabled={sending}
           >
@@ -363,87 +365,90 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 4,
+    paddingHorizontal: space.gutter,
+    marginTop: 6,
     gap: 10,
   },
-  navTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.ink,
-  },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 260 },
-  summary: { marginBottom: 16 },
-  placeholderSummary: { color: colors.muted, marginBottom: 16 },
-  bodyText: { fontSize: 16, lineHeight: 24, color: colors.ink },
+  navTitle: { ...type.navTitle, flex: 1, textAlign: "center" },
+  content: { paddingHorizontal: space.gutter, paddingTop: 16, paddingBottom: 260 },
+  summary: { marginBottom: 18 },
+  placeholderSummary: { ...type.body, color: colors.muted, marginBottom: 18 },
+  bodyText: { ...type.body, fontSize: 16, lineHeight: 24 },
   code: {
-    fontFamily: "Menlo",
+    fontFamily: fonts.mono,
     backgroundColor: colors.codeBg,
     overflow: "hidden",
-    borderRadius: 4,
+    borderRadius: 5,
     paddingHorizontal: 4,
     fontSize: 14,
   },
   needsCard: {
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF6EA",
     borderRadius: radii.card,
-    padding: 14,
+    padding: 16,
     marginBottom: 14,
   },
-  needsTitle: { fontWeight: "700", color: colors.needsAttention, marginBottom: 4 },
-  needsBody: { color: colors.ink, fontSize: 15 },
-  needsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  needsTitle: {
+    ...type.sectionLabel,
+    color: colors.needsAttention,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  needsBody: type.body,
+  needsRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  replyPill: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.pill,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  replyPrimary: { backgroundColor: colors.ink },
+  replyPrimaryText: { color: "#fff" },
   changesCard: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
-    padding: 14,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
+    padding: 16,
+    marginBottom: 18,
+    ...shadows.row,
   },
-  changesTitle: { fontSize: 17, fontWeight: "700", color: colors.ink, marginBottom: 8 },
+  changesTitle: { ...type.cardLabel, fontSize: 16, marginBottom: 4 },
   fileRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
   fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   fileIcon: {
     width: 28,
     height: 28,
-    borderRadius: 6,
-    backgroundColor: colors.codeBg,
+    borderRadius: 8,
+    backgroundColor: colors.chip,
     alignItems: "center",
     justifyContent: "center",
   },
-  fileIconText: { fontSize: 10, fontWeight: "700", color: colors.muted },
-  fileName: { fontSize: 15, color: colors.ink, flexShrink: 1 },
-  diff: { fontSize: 13, fontWeight: "600", marginLeft: 8 },
+  fileIconText: { fontFamily: fonts.mono, fontSize: 10, fontWeight: "600", color: colors.muted },
+  fileName: { ...type.body, fontSize: 14, flexShrink: 1 },
+  diff: { fontFamily: fonts.mono, fontSize: 12, fontWeight: "600", marginLeft: 8 },
   liveBubble: {
     backgroundColor: colors.bgElevated,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: radii.row,
+    padding: 14,
     marginBottom: 10,
+    ...shadows.row,
   },
-  liveLabel: { color: colors.working, fontSize: 12, fontWeight: "600", marginBottom: 4 },
-  threadLabel: {
-    marginTop: 8,
-    marginBottom: 8,
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.3,
+  liveLabel: { ...type.sectionLabel, color: colors.working, letterSpacing: 0.6, marginBottom: 5 },
+  threadLabel: { ...type.sectionLabel, marginTop: 10, marginBottom: 10, marginLeft: 3 },
+  msg: { borderRadius: radii.row, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
+  msgUser: { backgroundColor: "#E7F0FF", alignSelf: "flex-end", maxWidth: "92%" },
+  msgAssistant: {
+    backgroundColor: colors.bgElevated,
+    alignSelf: "flex-start",
+    maxWidth: "92%",
+    ...shadows.row,
   },
-  msg: { borderRadius: 14, padding: 12, marginBottom: 8 },
-  msgUser: { backgroundColor: "#E8F1FF", alignSelf: "flex-end", maxWidth: "92%" },
-  msgAssistant: { backgroundColor: colors.bgElevated, alignSelf: "flex-start", maxWidth: "92%" },
-  msgRole: { fontSize: 11, color: colors.muted, marginBottom: 4, textTransform: "uppercase" },
-  error: { color: colors.danger, marginBottom: 8 },
+  msgRole: { ...type.sectionLabel, fontSize: 10, letterSpacing: 0.7, marginBottom: 5 },
+  error: { ...type.meta, color: colors.danger, marginBottom: 8 },
   bottomDock: {
     position: "absolute",
     left: 16,
@@ -451,20 +456,22 @@ const styles = StyleSheet.create({
     bottom: 18,
     gap: 10,
   },
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
+  actionRow: { flexDirection: "row", gap: 8, paddingHorizontal: 2 },
   actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.pill,
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingVertical: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    ...shadows.control,
   },
-  actionSecondary: { opacity: 0.95 },
-  actionPillText: { fontSize: 14, fontWeight: "600", color: colors.ink },
+  actionPillText: {
+    ...type.meta,
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.ink,
+    letterSpacing: -0.2,
+  },
 });

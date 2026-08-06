@@ -1,4 +1,5 @@
 import type { AgentStatus, AgentSummary } from "@prime-pocket/protocol";
+import { colors } from "./theme";
 
 export type InboxFilter = "all" | "working" | "needs_attention" | "in_review";
 
@@ -39,5 +40,21 @@ export function statusLabel(status: AgentStatus): string {
       return "Stopped";
     default:
       return status;
+  }
+}
+
+export function statusAccent(status: AgentStatus): string {
+  switch (status) {
+    case "running":
+      return colors.working;
+    case "needs_input":
+      return colors.needsAttention;
+    case "error":
+      return colors.danger;
+    case "idle":
+    case "saved":
+      return colors.inReview;
+    default:
+      return colors.muted2;
   }
 }

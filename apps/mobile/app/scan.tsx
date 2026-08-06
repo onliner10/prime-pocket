@@ -6,8 +6,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
 import { upsertPairedHost } from "../src/storage";
-import { colors, radii } from "../src/theme";
-import { CircleButton, IconGlyph } from "../src/components/CircleButton";
+import { colors, fonts, radii, type } from "../src/theme";
+import { CircleButton } from "../src/components/CircleButton";
+import { Icon } from "../src/components/Icon";
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -20,8 +21,8 @@ export default function ScanScreen() {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.topBar}>
-          <CircleButton onPress={() => router.back()}>
-            <IconGlyph label="✕" size={14} />
+          <CircleButton accessibilityLabel="Close" onPress={() => router.back()}>
+            <Icon name="close" size={16} color={colors.ink} strokeWidth={2.1} />
           </CircleButton>
         </View>
         <Text style={styles.text}>Camera QR scan is unavailable on web. Use Pair host → paste.</Text>
@@ -109,16 +110,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.75)",
     borderRadius: 16,
   },
-  text: { color: colors.ink, textAlign: "center", paddingHorizontal: 24 },
-  textLight: { color: "#fff", textAlign: "center" },
-  error: { color: "#FF8A80", textAlign: "center", marginTop: 8 },
+  text: { ...type.body, textAlign: "center", paddingHorizontal: 28 },
+  textLight: { ...type.body, color: "#fff", textAlign: "center" },
+  error: { ...type.body, color: "#FF8A80", textAlign: "center", marginTop: 8 },
   btn: {
-    marginTop: 16,
+    marginTop: 18,
     alignSelf: "center",
     backgroundColor: colors.ink,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
     borderRadius: radii.pill,
   },
-  btnText: { color: "#fff", fontWeight: "700" },
+  btnText: {
+    fontFamily: fonts.sans,
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
 });

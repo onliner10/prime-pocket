@@ -1,29 +1,42 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
-import { colors, radii } from "../theme";
+import { colors, fonts, radii, shadows } from "../theme";
 
 export function CircleButton({
   onPress,
   children,
   style,
+  size = 38,
+  tone = "elevated",
   accessibilityLabel,
 }: {
   onPress?: () => void;
   children: ReactNode;
   style?: ViewStyle;
+  size?: number;
+  tone?: "elevated" | "sunken" | "bare";
   accessibilityLabel?: string;
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={[styles.circle, style]}
+      style={({ pressed }) => [
+        styles.circle,
+        { width: size, height: size },
+        tone === "elevated" && styles.elevated,
+        tone === "sunken" && styles.sunken,
+        pressed && styles.pressed,
+        style,
+      ]}
     >
       {children}
     </Pressable>
   );
 }
 
+/** Text-based glyph fallback for the few places a real icon is overkill. */
 export function IconGlyph({
   label,
   color = colors.ink,
@@ -34,22 +47,34 @@ export function IconGlyph({
   size?: number;
 }) {
   return (
-    <Text style={{ color, fontSize: size, fontWeight: "500", lineHeight: size + 2 }}>{label}</Text>
+    <Text
+      style={{
+        fontFamily: fonts.sans,
+        color,
+        fontSize: size,
+        fontWeight: "500",
+        lineHeight: size + 2,
+      }}
+    >
+      {label}
+    </Text>
   );
 }
 
 const styles = StyleSheet.create({
   circle: {
-    width: 36,
-    height: 36,
     borderRadius: radii.circle,
-    backgroundColor: colors.bgElevated,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  },
+  elevated: {
+    backgroundColor: colors.bgElevated,
+    ...shadows.control,
+  },
+  sunken: {
+    backgroundColor: colors.chip,
+  },
+  pressed: {
+    opacity: 0.55,
   },
 });

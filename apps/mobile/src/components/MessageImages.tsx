@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { isImageMime, Routes, type MessageImage, type PairedHost } from "@prime-pocket/protocol";
-import { colors } from "../theme";
+import { colors, type } from "../theme";
 
 export function resolveImageUri(
   image: MessageImage,
@@ -113,11 +113,11 @@ const styles = StyleSheet.create({
   frame: {
     width: 160,
     height: 110,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
-    backgroundColor: colors.codeBg,
+    backgroundColor: colors.chip,
   },
   image: { width: "100%", height: "100%" },
   broken: { alignItems: "center", justifyContent: "center" },
-  brokenText: { color: colors.muted, fontSize: 12, fontWeight: "600" },
+  brokenText: { ...type.meta, fontSize: 12, fontWeight: "600" },
 });
