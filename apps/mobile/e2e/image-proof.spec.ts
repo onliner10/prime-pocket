@@ -96,20 +96,30 @@ test("proof screenshots: both image directions", async ({ page }) => {
   });
   expect(host).toBeTruthy();
 
-  const agentsRes = await fetch(`${BRIDGE}/v1/agents`, {
-    headers: { authorization: `Bearer ${host!.token}` },
+  // Fresh idle agent so the mobile→agent shot isn't cluttered with prior artifacts
+  const launchPhone = await fetch(`${BRIDGE}/v1/agents`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${host!.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ name: "mobile-send-image" }),
   });
-  const { agents } = (await agentsRes.json()) as {
-    agents: Array<{ id: string; hostId: string; name: string }>;
+  expect(launchPhone.ok).toBeTruthy();
+  const { agent: phoneAgent } = (await launchPhone.json()) as {
+    agent: { id: string; hostId: string };
   };
-  const agent = agents.find((a) => a.name === "demo-welcome") ?? agents[0]!;
 
   // ========== 1) Mobile → agent ==========
-  await page.goto(`${EXPO}/agent/${agent.hostId}/${agent.id}`, { waitUntil: "networkidle" });
+  await page.goto(`${EXPO}/agent/${phoneAgent.hostId}/${phoneAgent.id}`, {
+    waitUntil: "networkidle",
+  });
   await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 15000 });
 
   await page.waitForFunction(
-    () => typeof (window as unknown as { __pocketSetPendingImages?: unknown }).__pocketSetPendingImages === "function",
+    () =>
+      typeof (window as unknown as { __pocketSetPendingImages?: unknown }).__pocketSetPendingImages ===
+      "function",
     null,
     { timeout: 15000 },
   );
