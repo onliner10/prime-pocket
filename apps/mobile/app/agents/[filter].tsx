@@ -136,15 +136,17 @@ export default function AgentsFilterScreen() {
         }}
       />
 
-      <PillComposer
-        value={draft}
-        onChangeText={setDraft}
-        onPlus={() => router.push("/pair")}
-        onSubmit={() => {
-          if (draft.trim()) setDraft("");
-        }}
-        placeholder="Plan, ask, build..."
-      />
+      <View style={styles.composerDock}>
+        <PillComposer
+          value={draft}
+          onChangeText={setDraft}
+          onPlus={() => router.push("/pair")}
+          onSubmit={() => {
+            if (draft.trim()) setDraft("");
+          }}
+          placeholder="Plan, ask, build..."
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -194,4 +196,10 @@ const styles = StyleSheet.create({
   badge: { fontSize: 13, color: colors.muted, fontWeight: "500" },
   meta: { marginTop: 4, color: colors.muted, fontSize: 13 },
   preview: { marginTop: 8, color: colors.ink, fontSize: 14, lineHeight: 20 },
+  composerDock: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 18,
+  },
 });

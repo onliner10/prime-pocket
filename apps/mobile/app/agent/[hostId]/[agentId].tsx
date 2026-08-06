@@ -314,7 +314,7 @@ export default function AgentScreen() {
         )}
       />
 
-      <View style={styles.bottomActions} pointerEvents="box-none">
+      <View style={styles.bottomDock} pointerEvents="box-none">
         <View style={styles.actionRow}>
           <Pressable style={styles.actionPill}>
             <Text style={styles.actionPillText}>↑ View details</Text>
@@ -327,17 +327,17 @@ export default function AgentScreen() {
             <Text style={styles.actionPillText}>Cancel</Text>
           </Pressable>
         </View>
-      </View>
 
-      <PillComposer
-        value={draft}
-        onChangeText={setDraft}
-        onSubmit={() => void send()}
-        onPlus={() => void onAttach()}
-        pendingImages={pendingImages}
-        onRemoveImage={(id) => setPendingImages((prev) => prev.filter((p) => p.id !== id))}
-        placeholder="Follow up..."
-      />
+        <PillComposer
+          value={draft}
+          onChangeText={setDraft}
+          onSubmit={() => void send()}
+          onPlus={() => void onAttach()}
+          pendingImages={pendingImages}
+          onRemoveImage={(id) => setPendingImages((prev) => prev.filter((p) => p.id !== id))}
+          placeholder="Follow up..."
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.ink,
   },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 200 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 260 },
   summary: { marginBottom: 16 },
   placeholderSummary: { color: colors.muted, marginBottom: 16 },
   bodyText: { fontSize: 16, lineHeight: 24, color: colors.ink },
@@ -430,13 +430,17 @@ const styles = StyleSheet.create({
   msgAssistant: { backgroundColor: colors.bgElevated, alignSelf: "flex-start", maxWidth: "92%" },
   msgRole: { fontSize: 11, color: colors.muted, marginBottom: 4, textTransform: "uppercase" },
   error: { color: colors.danger, marginBottom: 8 },
-  bottomActions: {
+  bottomDock: {
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 110,
+    bottom: 18,
+    gap: 10,
   },
-  actionRow: { flexDirection: "row", gap: 8 },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
   actionPill: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.pill,

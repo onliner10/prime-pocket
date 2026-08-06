@@ -148,12 +148,14 @@ export default function InboxScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <PillComposer
-        value={draft}
-        onChangeText={setDraft}
-        onPlus={() => router.push("/pair")}
-        onSubmit={submitComposer}
-      />
+      <View style={styles.composerDock}>
+        <PillComposer
+          value={draft}
+          onChangeText={setDraft}
+          onPlus={() => router.push("/pair")}
+          onSubmit={submitComposer}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -197,4 +199,10 @@ const styles = StyleSheet.create({
   emptyWorkspaces: { paddingVertical: 18 },
   emptyTitle: { fontSize: 17, fontWeight: "600", color: colors.ink },
   emptyBody: { marginTop: 4, color: colors.muted, fontSize: 14 },
+  composerDock: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 18,
+  },
 });
