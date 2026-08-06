@@ -11,7 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
-import { listFleetAgents } from "../src/api";
+import { listFleetAgents, PocketHostClient } from "../src/api";
 import { loadPairedHosts } from "../src/storage";
 import { countByFilter } from "../src/inbox";
 import { colors, radii, shadows, space, type } from "../src/theme";
@@ -27,6 +27,7 @@ export default function InboxScreen() {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
+  const [launching, setLaunching] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -50,16 +51,38 @@ export default function InboxScreen() {
 
   const counts = countByFilter(agents);
 
-  function submitComposer() {
-    if (!draft.trim() || hosts.length === 0) {
+  async function submitComposer() {
+    const prompt = draft.trim();
+    if (!prompt || hosts.length === 0) {
       router.push("/pair");
       return;
     }
-    router.push({
-      pathname: "/agents/all",
-      params: { seedPrompt: draft.trim() },
-    });
-    setDraft("");
+    if (launching) return;
+    setLaunching(true);
+    try {
+      const host = hosts[0]!;
+      const client = new PocketHostClient(host);
+      const short =
+        prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
+      const agent = await client.launch({
+        name: short,
+        prompt,
+      });
+      setDraft("");
+      router.push({
+        pathname: "/agent/[hostId]/[agentId]",
+        params: { hostId: agent.hostId || host.hostId, agentId: agent.id },
+      });
+    } catch (e) {
+      console.warn("launch failed", e);
+      router.push({
+        pathname: "/agents/all",
+        params: { seedPrompt: prompt },
+      });
+      setDraft("");
+    } finally {
+      setLaunching(false);
+    }
   }
 
   return (
@@ -171,7 +194,9 @@ export default function InboxScreen() {
           value={draft}
           onChangeText={setDraft}
           onPlus={() => router.push("/pair")}
-          onSubmit={submitComposer}
+          onSubmit={() => void submitComposer()}
+          sending={launching}
+          placeholder="Plan, ask, build..."
         />
       </View>
     </SafeAreaView>
