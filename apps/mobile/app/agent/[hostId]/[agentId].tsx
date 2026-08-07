@@ -27,22 +27,48 @@ import { PillComposer, type PendingImage } from "../../../src/components/PillCom
 import { ArtifactImage, MessageImages } from "../../../src/components/MessageImages";
 import { pickImages } from "../../../src/pickImages";
 
-function InlineCode({ text }: { text: string }) {
-  const parts = text.split(/(`[^`]+`)/g);
+/** Bold only for `**key phrases**`, mono chips for `` `code` `` — as in the reference. */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
   return (
     <Text style={styles.bodyText}>
-      {parts.map((part, i) =>
-        part.startsWith("`") && part.endsWith("`") ? (
-          <Text key={i} style={styles.code}>
-            {part.slice(1, -1)}
-          </Text>
-        ) : (
-          <Text key={i}>{part}</Text>
-        ),
-      )}
+      {parts.map((part, i) => {
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+          return (
+            <Text key={i} style={styles.code}>
+              {part.slice(1, -1)}
+            </Text>
+          );
+        }
+        if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+          return (
+            <Text key={i} style={styles.bodyStrong}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        return <Text key={i}>{part}</Text>;
+      })}
     </Text>
   );
 }
+
+/** Small type badge in the Changes card: TS / JS / MD / IMG, tinted per language. */
+function fileBadge(name: string, imageLike: boolean): { label: string; accent: string } {
+  if (imageLike) return { label: "IMG", accent: colors.imgViolet };
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "ts" || ext === "tsx") return { label: "TS", accent: colors.tsBlue };
+  if (ext === "js" || ext === "jsx" || ext === "mjs" || ext === "cjs")
+    return { label: "JS", accent: colors.jsAmber };
+  if (ext === "css" || ext === "scss") return { label: "CSS", accent: colors.tsBlue };
+  if (ext === "json") return { label: "{}", accent: colors.muted };
+  if (ext === "md" || ext === "mdx") return { label: "MD", accent: colors.muted };
+  return { label: (ext || "txt").slice(0, 3).toUpperCase(), accent: colors.muted };
+}
+
+/** Collapsed Changes card shows a handful of rows; the rest sit behind View details. */
+const COLLAPSED_FILES = 4;
+const COLLAPSED_SUMMARY = 600;
 
 export default function AgentScreen() {
   const router = useRouter();
@@ -57,6 +83,7 @@ export default function AgentScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [imagesEnabled, setImagesEnabled] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const streamRef = useRef<{ close: () => void } | null>(null);
   const deltasRef = useRef<Record<string, string>>({});
   const sendingRef = useRef(false);
@@ -196,6 +223,9 @@ export default function AgentScreen() {
 
   const assistantSummary = [...messages].reverse().find((m) => m.role === "assistant")?.text;
   const artifacts: ArtifactMeta[] = snapshot?.artifacts ?? [];
+  const visibleArtifacts = expanded ? artifacts : artifacts.slice(0, COLLAPSED_FILES);
+  const hiddenArtifacts = artifacts.length - visibleArtifacts.length;
+  const running = snapshot?.streaming || snapshot?.agent.status === "running";
 
   if (!host && !error) {
     return (
@@ -227,7 +257,9 @@ export default function AgentScreen() {
           <View>
             {assistantSummary ? (
               <View style={styles.summary}>
-                <InlineCode text={assistantSummary.slice(0, 600)} />
+                <RichText
+                  text={expanded ? assistantSummary : assistantSummary.slice(0, COLLAPSED_SUMMARY)}
+                />
               </View>
             ) : (
               <Text style={styles.placeholderSummary}>Waiting for the agent to report…</Text>
@@ -263,48 +295,81 @@ export default function AgentScreen() {
             ) : null}
 
             {artifacts.length > 0 ? (
-              <View style={styles.changesCard}>
-                <Text style={styles.changesTitle}>Changes {artifacts.length}</Text>
-                {artifacts.map((a) => {
-                  const url = host
-                    ? `${client?.artifactUrl(agentId!, a.id)}?token=${encodeURIComponent(host.token)}`
-                    : undefined;
-                  const imageLike = a.kind === "image" || isImageMime(a.mimeType);
-                  return (
-                    <View key={a.id} style={{ marginBottom: 8 }}>
-                      <Pressable
-                        style={styles.fileRow}
-                        onPress={() => {
-                          if (url) void Linking.openURL(url);
-                        }}
-                      >
-                        <View style={styles.fileLeft}>
-                          <View style={styles.fileIcon}>
-                            <Text style={styles.fileIconText}>
-                              {imageLike
-                                ? "IMG"
-                                : a.name.endsWith(".ts") || a.name.endsWith(".tsx")
-                                  ? "TS"
-                                  : a.name.endsWith(".js")
-                                    ? "JS"
-                                    : "MD"}
+              <>
+                <View style={styles.changesCard}>
+                  <View style={styles.changesHead}>
+                    <Text style={styles.changesTitle}>Changes</Text>
+                    <Text style={styles.changesCount}>{artifacts.length}</Text>
+                  </View>
+                  {visibleArtifacts.map((a) => {
+                    const url = host
+                      ? `${client?.artifactUrl(agentId!, a.id)}?token=${encodeURIComponent(host.token)}`
+                      : undefined;
+                    const imageLike = a.kind === "image" || isImageMime(a.mimeType);
+                    const badge = fileBadge(a.name, imageLike);
+                    return (
+                      <View key={a.id}>
+                        <Pressable
+                          style={styles.fileRow}
+                          onPress={() => {
+                            if (url) void Linking.openURL(url);
+                          }}
+                        >
+                          <View style={styles.fileLeft}>
+                            <View style={[styles.fileIcon, { backgroundColor: badge.accent + "14" }]}>
+                              <Text style={[styles.fileIconText, { color: badge.accent }]}>
+                                {badge.label}
+                              </Text>
+                            </View>
+                            <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                              {a.name}
                             </Text>
                           </View>
-                          <Text style={styles.fileName}>{a.name}</Text>
-                        </View>
-                        <Text style={styles.diff}>
-                          <Text style={{ color: colors.diffAdd }}>
-                            +{Math.max(1, Math.round(a.sizeBytes / 40))}
-                          </Text>
-                          {"  "}
-                          <Text style={{ color: colors.diffDel }}>-0</Text>
-                        </Text>
-                      </Pressable>
-                      {imageLike && url ? <ArtifactImage mimeType={a.mimeType} url={url} /> : null}
-                    </View>
-                  );
-                })}
-              </View>
+                          <View style={styles.diffGroup}>
+                            <Text style={[styles.diff, styles.diffAdd]}>
+                              +{Math.max(1, Math.round(a.sizeBytes / 40))}
+                            </Text>
+                            <Text style={[styles.diff, styles.diffDel]}>-0</Text>
+                          </View>
+                        </Pressable>
+                        {imageLike && url ? (
+                          <View style={styles.filePreview}>
+                            <ArtifactImage mimeType={a.mimeType} url={url} compact />
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                  {hiddenArtifacts > 0 ? (
+                    <Text style={styles.moreFiles}>
+                      +{hiddenArtifacts} more {hiddenArtifacts === 1 ? "file" : "files"}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
+                    onPress={() => setExpanded((v) => !v)}
+                  >
+                    <Icon name="gitBranch" size={15} color={colors.ink} strokeWidth={1.8} />
+                    <Text style={styles.actionPillText}>
+                      {expanded ? "Hide details" : "View details"}
+                    </Text>
+                  </Pressable>
+                  {running ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
+                      onPress={() => void client?.cancel(agentId!).catch((e) => setError(String(e)))}
+                      disabled={sending}
+                    >
+                      <Text style={styles.actionPillText}>Cancel</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </>
             ) : null}
 
             {Object.entries(streamingText).map(([id, text]) => (
@@ -320,7 +385,7 @@ export default function AgentScreen() {
         }
         renderItem={({ item }) => (
           <View style={[styles.msg, item.role === "user" ? styles.msgUser : styles.msgAssistant]}>
-            <Text style={styles.msgRole}>{item.role}</Text>
+            <Text style={styles.msgRole}>{item.role === "user" ? "You" : "Agent"}</Text>
             {item.text ? <Text style={styles.bodyText}>{item.text}</Text> : null}
             <MessageImages images={item.images} host={host} agentId={agentId} />
           </View>
@@ -328,20 +393,6 @@ export default function AgentScreen() {
       />
 
       <View style={styles.bottomDock} pointerEvents="box-none">
-        <View style={styles.actionRow}>
-          <Pressable style={styles.actionPill}>
-            <Icon name="arrowUp" size={15} color={colors.ink} strokeWidth={2.1} />
-            <Text style={styles.actionPillText}>View details</Text>
-          </Pressable>
-          <Pressable
-            style={styles.actionPill}
-            onPress={() => void client?.cancel(agentId!).catch((e) => setError(String(e)))}
-            disabled={sending}
-          >
-            <Text style={styles.actionPillText}>Cancel</Text>
-          </Pressable>
-        </View>
-
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -370,10 +421,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   navTitle: { ...type.navTitle, flex: 1, textAlign: "center" },
-  content: { paddingHorizontal: space.gutter, paddingTop: 16, paddingBottom: 260 },
-  summary: { marginBottom: 18 },
-  placeholderSummary: { ...type.body, color: colors.muted, marginBottom: 18 },
-  bodyText: { ...type.body, fontSize: 16, lineHeight: 24 },
+  content: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 190 },
+  summary: { marginBottom: 20 },
+  placeholderSummary: { ...type.body, color: colors.muted, marginBottom: 20 },
+  bodyText: type.body,
+  bodyStrong: type.bodyStrong,
   code: {
     fontFamily: fonts.mono,
     backgroundColor: colors.codeBg,
@@ -384,7 +436,7 @@ const styles = StyleSheet.create({
   },
   needsCard: {
     backgroundColor: "#FFF6EA",
-    borderRadius: radii.card,
+    borderRadius: radii.panel,
     padding: 16,
     marginBottom: 14,
   },
@@ -406,30 +458,39 @@ const styles = StyleSheet.create({
   replyPrimaryText: { color: "#fff" },
   changesCard: {
     backgroundColor: colors.bgElevated,
-    borderRadius: radii.card,
-    padding: 16,
-    marginBottom: 18,
+    borderRadius: radii.panel,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 11,
     ...shadows.row,
   },
-  changesTitle: { ...type.cardLabel, fontSize: 16, marginBottom: 4 },
+  changesHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  changesTitle: type.cardTitle,
+  changesCount: { ...type.cardTitle, color: colors.muted, fontWeight: "500" },
   fileRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 9,
+    gap: 10,
+    paddingVertical: 7,
   },
   fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   fileIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     backgroundColor: colors.chip,
     alignItems: "center",
     justifyContent: "center",
   },
-  fileIconText: { fontFamily: fonts.mono, fontSize: 10, fontWeight: "600", color: colors.muted },
-  fileName: { ...type.body, fontSize: 14, flexShrink: 1 },
-  diff: { fontFamily: fonts.mono, fontSize: 12, fontWeight: "600", marginLeft: 8 },
+  fileIconText: type.badge,
+  fileName: { ...type.bodySmall, fontWeight: "500", flexShrink: 1 },
+  filePreview: { paddingLeft: 36, paddingTop: 2, paddingBottom: 6 },
+  diffGroup: { flexDirection: "row", alignItems: "center", gap: 9 },
+  diff: type.diff,
+  diffAdd: { color: colors.diffAdd },
+  diffDel: { color: colors.diffDel },
+  moreFiles: { ...type.meta, fontSize: 12, marginTop: 4, marginLeft: 36 },
   liveBubble: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.row,
@@ -438,8 +499,8 @@ const styles = StyleSheet.create({
     ...shadows.row,
   },
   liveLabel: { ...type.sectionLabel, color: colors.working, letterSpacing: 0.6, marginBottom: 5 },
-  threadLabel: { ...type.sectionLabel, marginTop: 10, marginBottom: 10, marginLeft: 3 },
-  msg: { borderRadius: radii.row, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
+  threadLabel: { ...type.sectionLabel, marginTop: 22, marginBottom: 10, marginLeft: 3 },
+  msg: { borderRadius: radii.row, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 8 },
   msgUser: { backgroundColor: "#E7F0FF", alignSelf: "flex-end", maxWidth: "92%" },
   msgAssistant: {
     backgroundColor: colors.bgElevated,
@@ -447,31 +508,25 @@ const styles = StyleSheet.create({
     maxWidth: "92%",
     ...shadows.row,
   },
-  msgRole: { ...type.sectionLabel, fontSize: 10, letterSpacing: 0.7, marginBottom: 5 },
+  msgRole: { ...type.sectionLabel, fontSize: 11, letterSpacing: 0.5, marginBottom: 4 },
   error: { ...type.meta, color: colors.danger, marginBottom: 8 },
   bottomDock: {
     position: "absolute",
     left: 16,
     right: 16,
     bottom: 18,
-    gap: 10,
   },
-  actionRow: { flexDirection: "row", gap: 8, paddingHorizontal: 2 },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 12, paddingHorizontal: 2 },
   actionPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.pill,
     paddingHorizontal: 15,
     paddingVertical: 10,
     ...shadows.control,
   },
-  actionPillText: {
-    ...type.meta,
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.ink,
-    letterSpacing: -0.2,
-  },
+  actionPillText: type.pill,
+  pressed: { opacity: 0.7 },
 });

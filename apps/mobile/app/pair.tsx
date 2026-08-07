@@ -194,13 +194,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: "center",
   },
-  primaryText: {
-    fontFamily: fonts.sans,
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 16,
-    letterSpacing: -0.2,
-  },
+  primaryText: { ...type.row, fontWeight: "600", color: "#fff" },
   secondary: {
     marginTop: 10,
     backgroundColor: colors.bgElevated,
@@ -208,12 +202,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: "center",
   },
-  secondaryText: {
-    fontFamily: fonts.sans,
-    color: colors.ink,
-    fontWeight: "600",
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
+  secondaryText: { ...type.pill, fontSize: 15 },
   error: { ...type.body, color: colors.danger, marginTop: 14 },
 });

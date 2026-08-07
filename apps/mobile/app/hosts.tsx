@@ -110,5 +110,5 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   danger: { backgroundColor: "#FFEBEA" },
-  btnText: { ...type.meta, fontSize: 14, fontWeight: "600", color: colors.ink, letterSpacing: -0.2 },
+  btnText: type.pill,
 });

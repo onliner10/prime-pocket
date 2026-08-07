@@ -17,6 +17,7 @@ export type IconName =
   | "arrowUp"
   | "close"
   | "filter"
+  | "gitBranch"
   | "more";
 
 type Draw = (color: string, sw: number) => ReactNode;
@@ -95,6 +96,15 @@ const ICONS: Record<IconName, Draw> = {
   arrowUp: (c, sw) => <Path d="M12 19.2V5.4M5.8 11.6 12 5.4l6.2 6.2" stroke={c} strokeWidth={sw} />,
   close: (c, sw) => <Path d="M6 6l12 12M18 6 6 18" stroke={c} strokeWidth={sw} />,
   filter: (c, sw) => <Path d="M3.4 6.8h17.2M6.6 12h10.8M10 17.2h4" stroke={c} strokeWidth={sw} />,
+  // Two nodes on a trunk with a branch merging back in — the "View PR" glyph.
+  gitBranch: (c, sw) => (
+    <>
+      <Circle cx={7} cy={5.4} r={2.4} stroke={c} strokeWidth={sw} />
+      <Circle cx={7} cy={18.6} r={2.4} stroke={c} strokeWidth={sw} />
+      <Circle cx={17} cy={8.6} r={2.4} stroke={c} strokeWidth={sw} />
+      <Path d="M7 7.8v8.4M17 11v.6a4 4 0 0 1-4 4H9.4" stroke={c} strokeWidth={sw} />
+    </>
+  ),
   more: (c) => (
     <>
       <Circle cx={5.4} cy={12} r={1.35} fill={c} />

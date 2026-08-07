@@ -21,14 +21,21 @@ export const colors = {
   codeBg: "#F0F0F2",
   chip: "#F2F2F4",
   plusGreen: "#22C55E",
-  diffAdd: "#34C759",
-  diffDel: "#FF453A",
+  // Diff counts: a slightly desaturated green against a pink-leaning red
+  diffAdd: "#1FA855",
+  diffDel: "#F04E6E",
+  // File-type badge accents
+  tsBlue: "#0A6EDB",
+  jsAmber: "#A6790C",
+  imgViolet: "#7C4DDA",
 } as const;
 
 export const radii = {
+  /** Cards inside a scroll list — Cursor keeps these tighter than full panels. */
+  panel: 16,
   row: 16,
   card: 20,
-  pill: 28,
+  pill: 999,
   circle: 999,
 } as const;
 
@@ -52,32 +59,48 @@ export const fonts = {
 } as const;
 
 /**
- * Shared type ramp. Tracking is negative at display sizes and slightly positive
- * for small caps labels, which is what makes system-ish sans read as considered.
+ * Shared type ramp, matched to Cursor mobile's density.
+ *
+ * Weight tops out at 600 — the reference never uses 700+, so headings read as
+ * confident rather than shouty. Tracking goes negative as size grows (optical
+ * sizing that variable Geist does not do on its own) and positive only for the
+ * small tracked section labels. Body is 16/24 so paragraphs are not cramped.
  */
 export const type = {
+  /** Large screen titles: Inbox, All Agents. */
   display: {
     fontFamily: fonts.sans,
     fontSize: 34,
-    lineHeight: 40,
-    fontWeight: "700",
-    letterSpacing: -1.1,
+    lineHeight: 41,
+    fontWeight: "600",
+    letterSpacing: -1,
     color: colors.ink,
   },
+  /** Empty-state and modal titles. */
   title: {
     fontFamily: fonts.sans,
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 21,
+    lineHeight: 27,
     fontWeight: "600",
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
     color: colors.ink,
   },
+  /** Top-bar title — medium, not bold, so it sits behind the content. */
   navTitle: {
     fontFamily: fonts.sans,
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "500",
+    letterSpacing: -0.3,
+    color: colors.ink,
+  },
+  /** Header inside a card, e.g. "Changes". */
+  cardTitle: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "600",
-    letterSpacing: -0.2,
+    letterSpacing: -0.25,
     color: colors.ink,
   },
   cardLabel: {
@@ -98,8 +121,26 @@ export const type = {
   },
   body: {
     fontFamily: fonts.sans,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "400",
+    letterSpacing: -0.15,
+    color: colors.ink,
+  },
+  /** Emphasis inside body copy — key phrases only. */
+  bodyStrong: {
+    fontFamily: fonts.sans,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "600",
+    letterSpacing: -0.15,
+    color: colors.ink,
+  },
+  /** Secondary copy: list previews, helper text. */
+  bodySmall: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "400",
     letterSpacing: -0.1,
     color: colors.ink,
@@ -115,17 +156,45 @@ export const type = {
   sectionLabel: {
     fontFamily: fonts.sans,
     fontSize: 12,
-    lineHeight: 15,
+    lineHeight: 16,
     fontWeight: "600",
-    letterSpacing: 0.9,
+    letterSpacing: 0.8,
     color: colors.muted,
+  },
+  /** Pill button labels. */
+  pill: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: colors.ink,
   },
   input: {
     fontFamily: fonts.sans,
     fontSize: 16,
+    lineHeight: 21,
     fontWeight: "400",
     letterSpacing: -0.2,
     color: colors.ink,
+  },
+  /** Two/three-letter file-type badges. */
+  badge: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    color: colors.muted,
+  },
+  /** Diff counts — tabular so +/- columns line up row to row. */
+  diff: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    letterSpacing: -0.1,
+    fontVariant: ["tabular-nums"],
   },
 } satisfies Record<string, TextStyle>;
 

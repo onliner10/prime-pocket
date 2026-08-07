@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
 import { upsertPairedHost } from "../src/storage";
-import { colors, fonts, radii, type } from "../src/theme";
+import { colors, radii, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
 
@@ -121,11 +121,5 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: radii.pill,
   },
-  btnText: {
-    fontFamily: fonts.sans,
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
+  btnText: { ...type.pill, fontSize: 15, color: "#fff" },
 });

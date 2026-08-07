@@ -46,12 +46,15 @@ export function MessageImages({
 export function ArtifactImage({
   mimeType,
   url,
+  compact = false,
 }: {
   mimeType: string;
   url: string;
+  /** Thumbnail sizing for previews nested inside a card row. */
+  compact?: boolean;
 }) {
   if (!isImageMime(mimeType)) return null;
-  return <RemoteImage uri={url} />;
+  return <RemoteImage uri={url} compact={compact} />;
 }
 
 function AuthImage({
@@ -81,18 +84,18 @@ function AuthImage({
   return <RemoteImage uri={uri} />;
 }
 
-function RemoteImage({ uri }: { uri: string }) {
+function RemoteImage({ uri, compact = false }: { uri: string; compact?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
-      <View style={[styles.frame, styles.broken]}>
+      <View style={[styles.frame, compact && styles.frameCompact, styles.broken]}>
         <Text style={styles.brokenText}>Failed</Text>
       </View>
     );
   }
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, compact && styles.frameCompact]}>
       {loading ? <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.muted} /> : null}
       <Image
         source={{ uri }}
@@ -117,6 +120,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.chip,
   },
+  frameCompact: { width: 124, height: 84, borderRadius: 10 },
   image: { width: "100%", height: "100%" },
   broken: { alignItems: "center", justifyContent: "center" },
   brokenText: { ...type.meta, fontSize: 12, fontWeight: "600" },

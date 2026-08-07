@@ -57,6 +57,15 @@ export default function Root({ children }: PropsWithChildren) {
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
+            -webkit-tap-highlight-color: transparent;
+            /* Geist is variable across 100–900, so never let the browser fake a weight —
+               synthesized bold is what made headings read heavier than the reference. */
+            font-synthesis: none;
+            font-optical-sizing: auto;
+          }
+          input, textarea, button {
+            font-family: inherit;
+            font-synthesis: none;
           }
         `}</style>
       </head>
