@@ -1,7 +1,11 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "../src/theme";
+import { injectWebFonts } from "../src/webFonts";
+
+if (Platform.OS === "web") injectWebFonts();
 
 export default function RootLayout() {
   return (

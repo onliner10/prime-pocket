@@ -1,9 +1,11 @@
 import { ScrollViewStyleReset } from "expo-router/html";
 import type { PropsWithChildren } from "react";
+import { WEB_FONT_CSS, WEB_FONT_STYLE_ID } from "../src/webFonts";
 
 /**
- * Custom HTML shell so mobile web uses a real phone viewport (Cursor-like screenshots)
- * and a self-hosted variable Geist instead of whatever sans the host machine has.
+ * Custom HTML shell so mobile web uses a real phone viewport (Cursor-like
+ * screenshots) and a self-hosted variable Geist. Only static export renders
+ * this file — the dev server injects the same CSS from app/_layout.tsx.
  */
 export default function Root({ children }: PropsWithChildren) {
   return (
@@ -16,58 +18,7 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
         />
         <ScrollViewStyleReset />
-        <style>{`
-          @font-face {
-            font-family: 'Geist';
-            font-style: normal;
-            font-weight: 100 900;
-            font-display: block;
-            src: url('/fonts/Geist-latin.woff2') format('woff2');
-            unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-              U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-              U+2212, U+2215, U+FEFF, U+FFFD;
-          }
-          @font-face {
-            font-family: 'Geist';
-            font-style: normal;
-            font-weight: 100 900;
-            font-display: block;
-            src: url('/fonts/Geist-latin-ext.woff2') format('woff2');
-            unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-              U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-              U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-          }
-          @font-face {
-            font-family: 'Geist Mono';
-            font-style: normal;
-            font-weight: 100 900;
-            font-display: block;
-            src: url('/fonts/GeistMono-latin.woff2') format('woff2');
-          }
-          html, body, #root {
-            height: 100%;
-            margin: 0;
-            background: #F2F2F2;
-            -webkit-text-size-adjust: 100%;
-            text-size-adjust: 100%;
-          }
-          body {
-            overflow: hidden;
-            font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            text-rendering: optimizeLegibility;
-            -webkit-tap-highlight-color: transparent;
-            /* Geist is variable across 100–900, so never let the browser fake a weight —
-               synthesized bold is what made headings read heavier than the reference. */
-            font-synthesis: none;
-            font-optical-sizing: auto;
-          }
-          input, textarea, button {
-            font-family: inherit;
-            font-synthesis: none;
-          }
-        `}</style>
+        <style id={WEB_FONT_STYLE_ID}>{WEB_FONT_CSS}</style>
       </head>
       <body>{children}</body>
     </html>
