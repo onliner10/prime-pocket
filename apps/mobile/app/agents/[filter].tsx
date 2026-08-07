@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
 import { listFleetAgents } from "../../src/api";
 import { loadPairedHosts } from "../../src/storage";
 import { filterAgents, statusAccent, statusLabel, type InboxFilter } from "../../src/inbox";
-import { colors, radii, shadows, space, type } from "../../src/theme";
+import { colors, proofSafeArea, radii, shadows, space, type } from "../../src/theme";
 import { CircleButton } from "../../src/components/CircleButton";
 import { Icon, type IconName } from "../../src/components/Icon";
 import { PillComposer } from "../../src/components/PillComposer";
@@ -47,6 +47,8 @@ const EMPTY: Record<InboxFilter, { title: string; body: string; icon: IconName; 
 
 export default function AgentsFilterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom + proofSafeArea.bottom;
   const params = useLocalSearchParams<{ filter?: string }>();
   const raw = (params.filter ?? "all") as InboxFilter;
   const filter: InboxFilter = raw in TITLES ? raw : "all";
@@ -55,10 +57,12 @@ export default function AgentsFilterScreen() {
   const [hosts, setHosts] = useState<PairedHost[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setConnectionError(null);
     const paired = await loadPairedHosts();
     setHosts(paired);
     if (!paired.length) {
@@ -68,6 +72,7 @@ export default function AgentsFilterScreen() {
     }
     const result = await listFleetAgents(paired);
     setAgents(result.agents);
+    setConnectionError(result.errors.length ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable` : null);
     setLoading(false);
   }, []);
 
@@ -105,6 +110,19 @@ export default function AgentsFilterScreen() {
         ) : null}
       </View>
 
+      {connectionError ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open workspaces to reconnect"
+          style={({ pressed }) => [styles.connectionNotice, pressed && styles.pressed]}
+          onPress={() => router.push("/hosts")}
+        >
+          <View style={styles.connectionDot} />
+          <Text style={styles.connectionText}>{connectionError}. Tap to reconnect.</Text>
+          <Icon name="chevronRight" size={16} color={colors.muted2} strokeWidth={2.1} />
+        </Pressable>
+      ) : null}
+
       <FlatList
         data={filtered}
         keyExtractor={(a) => `${a.hostId}:${a.id}`}
@@ -116,7 +134,7 @@ export default function AgentsFilterScreen() {
             tintColor={colors.muted}
           />
         }
-        contentContainerStyle={filtered.length === 0 ? styles.emptyWrap : styles.list}
+        contentContainerStyle={filtered.length === 0 ? [styles.emptyWrap, { paddingBottom: 115 + bottomInset }] : [styles.list, { paddingBottom: 130 + bottomInset }]}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{empty.title}</Text>
@@ -156,7 +174,10 @@ export default function AgentsFilterScreen() {
         }}
       />
 
-      <View style={styles.composerDock} pointerEvents="box-none">
+      <View
+        style={[styles.composerDock, { bottom: Math.max(14, bottomInset + 10) }]}
+        pointerEvents="box-none"
+      >
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -172,7 +193,7 @@ export default function AgentsFilterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -184,14 +205,29 @@ const styles = StyleSheet.create({
   heading: { paddingHorizontal: space.gutter, marginTop: 22, marginBottom: 16 },
   title: type.display,
   subtitle: { ...type.meta, marginTop: 3 },
-  list: { paddingHorizontal: space.gutter, paddingBottom: 130, gap: 10 },
-  emptyWrap: { flexGrow: 1, justifyContent: "center", paddingBottom: 115 },
+  connectionNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginHorizontal: space.gutter,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radii.row,
+    backgroundColor: "#FFF4EA",
+  },
+  connectionDot: { width: 7, height: 7, borderRadius: radii.circle, backgroundColor: colors.needsAttention },
+  connectionText: { ...type.meta, color: colors.ink2, flex: 1 },
+  list: { paddingHorizontal: space.gutter, gap: 10 },
+  emptyWrap: { flexGrow: 1, justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 30 },
   emptyTitle: { ...type.body, color: colors.muted, fontSize: 19, lineHeight: 25, textAlign: "center" },
   emptyBody: { ...type.body, color: colors.muted, fontSize: 17, lineHeight: 24, textAlign: "center", marginTop: 5 },
   row: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
     paddingHorizontal: 16,
     paddingVertical: 15,
     ...shadows.row,
@@ -204,5 +240,5 @@ const styles = StyleSheet.create({
   badgeText: { ...type.meta, fontSize: 12 },
   meta: { ...type.meta, fontSize: 12, fontWeight: "400", marginTop: 3 },
   preview: { ...type.bodySmall, color: colors.ink2, marginTop: 8 },
-  composerDock: { position: "absolute", left: 12, right: 12, bottom: 18 },
+  composerDock: { position: "absolute", left: 12, right: 12 },
 });

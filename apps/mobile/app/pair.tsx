@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
 import { upsertPairedHost } from "../src/storage";
-import { colors, fonts, radii, space, type } from "../src/theme";
+import { colors, fonts, proofSafeArea, radii, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
 
@@ -161,7 +161,7 @@ export default function PairScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
   topBar: {
     flexDirection: "row",
     alignItems: "center",

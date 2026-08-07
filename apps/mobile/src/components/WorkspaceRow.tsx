@@ -71,5 +71,5 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     backgroundColor: "transparent",
   },
-  name: { ...type.row, fontSize: 18, lineHeight: 23, flex: 1 },
+  name: { ...type.row, fontSize: 18, lineHeight: 23, fontWeight: "400", flex: 1 },
 });

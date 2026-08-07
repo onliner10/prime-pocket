@@ -12,10 +12,11 @@ export const colors = {
   hairline: "rgba(0,0,0,0.06)",
   cardShadow: "rgba(0,0,0,0.04)",
   // Status accents, tuned to the Cursor mobile inbox
-  allAgents: "#FF4B00",
-  working: "#2589BD",
-  needsAttention: "#D68A00",
-  inReview: "#D4318D",
+  // Cursor keeps status color present but restrained; reserve it for state only.
+  allAgents: "#EC5728",
+  working: "#4886B2",
+  needsAttention: "#C08532",
+  inReview: "#B8448A",
   addGreen: "#34C759",
   danger: "#FF3B30",
   codeBg: "#E9E9E9",
@@ -34,7 +35,7 @@ export const radii = {
   /** Cards inside a scroll list — Cursor keeps these tighter than full panels. */
   panel: 16,
   row: 16,
-  card: 20,
+  card: 16,
   pill: 999,
   circle: 999,
 } as const;
@@ -42,6 +43,16 @@ export const radii = {
 export const space = {
   gutter: 20,
   gap: 12,
+} as const;
+
+/**
+ * RN Web has no native status bar/home-indicator inset. Keep the web proof
+ * viewport honest to the iPhone screenshots while native SafeAreaView remains
+ * the source of truth on device.
+ */
+export const proofSafeArea = {
+  top: Platform.OS === "web" ? 50 : 0,
+  bottom: Platform.OS === "web" ? 34 : 0,
 } as const;
 
 /**

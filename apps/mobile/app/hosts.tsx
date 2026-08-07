@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { PairedHost } from "@prime-pocket/protocol";
 import { loadPairedHosts, removePairedHost, upsertPairedHost } from "../src/storage";
 import { reconnectPairedHost } from "../src/api";
-import { colors, fonts, radii, shadows, space, type } from "../src/theme";
+import { colors, fonts, proofSafeArea, radii, shadows, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
@@ -76,7 +76,7 @@ export default function HostsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
   topBar: {
     flexDirection: "row",
     alignItems: "center",

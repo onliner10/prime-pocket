@@ -20,7 +20,7 @@ import {
 } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../../src/api";
 import { loadPairedHosts } from "../../../src/storage";
-import { colors, fonts, radii, shadows, space, type } from "../../../src/theme";
+import { colors, fonts, proofSafeArea, radii, shadows, space, type } from "../../../src/theme";
 import { CircleButton } from "../../../src/components/CircleButton";
 import { Icon } from "../../../src/components/Icon";
 import { PillComposer, type PendingImage } from "../../../src/components/PillComposer";
@@ -167,6 +167,7 @@ function ChangesCard({
 export default function AgentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom + proofSafeArea.bottom;
   const { hostId, agentId } = useLocalSearchParams<{ hostId: string; agentId: string }>();
   const [host, setHost] = useState<PairedHost | null>(null);
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
@@ -336,7 +337,7 @@ export default function AgentScreen() {
 
   const showPr = artifacts.length > 0;
   const draftPr = artifacts.length >= 6;
-  const composerBottom = 18 + insets.bottom;
+  const composerBottom = 18 + bottomInset;
   const actionBottom = composerBottom + 56 + 8;
 
   return (
@@ -461,8 +462,8 @@ export default function AgentScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -519,12 +520,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     overflow: "hidden",
   },
-  changesHead: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  changesHead: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
   changesTitle: { ...type.body, fontSize: 17, lineHeight: 22 },
   changesCount: { ...type.body, fontSize: 17, lineHeight: 22, color: colors.muted },
   fileRowWrap: { paddingHorizontal: 13 },
   fileDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  fileRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 52 },
+  fileRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 46 },
   fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
   fileBadge: { width: 25, fontFamily: fonts.mono, fontSize: 13, lineHeight: 18, fontWeight: "400" },
   fileName: { ...type.body, flexShrink: 1, fontSize: 17 },

@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingTop: 15,
     paddingBottom: 16,
     justifyContent: "space-between",
@@ -49,6 +49,6 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   iconRow: { height: 25, justifyContent: "center" },
-  title: { ...type.cardLabel, marginTop: 22 },
-  count: { color: colors.muted, fontWeight: "500" },
+  title: { ...type.cardLabel, fontSize: 17, lineHeight: 21, fontWeight: "400", letterSpacing: -0.4, marginTop: 22 },
+  count: { color: colors.muted, fontWeight: "400" },
 });

@@ -69,6 +69,8 @@ const styles = StyleSheet.create({
   },
   elevated: {
     backgroundColor: colors.bgElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.98)",
     ...shadows.control,
   },
   sunken: {

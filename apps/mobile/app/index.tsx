@@ -9,12 +9,12 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
 import { listFleetAgents, PocketHostClient } from "../src/api";
 import { loadPairedHosts } from "../src/storage";
 import { countByFilter } from "../src/inbox";
-import { colors, radii, shadows, space, type } from "../src/theme";
+import { colors, proofSafeArea, radii, shadows, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
 import { StatusCard } from "../src/components/StatusCard";
@@ -23,14 +23,18 @@ import { PillComposer } from "../src/components/PillComposer";
 
 export default function InboxScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom + proofSafeArea.bottom;
   const [hosts, setHosts] = useState<PairedHost[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [launching, setLaunching] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setConnectionError(null);
     const paired = await loadPairedHosts();
     setHosts(paired);
     if (paired.length === 0) {
@@ -40,6 +44,7 @@ export default function InboxScreen() {
     }
     const result = await listFleetAgents(paired);
     setAgents(result.agents);
+    setConnectionError(result.errors.length ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable` : null);
     setLoading(false);
   }, []);
 
@@ -101,7 +106,7 @@ export default function InboxScreen() {
         <View style={styles.topBar}>
           <CircleButton
             accessibilityLabel="Profile"
-            tone="bare"
+            tone="elevated"
             onPress={() => router.push("/hosts")}
           >
             <View style={styles.avatar}>
@@ -154,6 +159,19 @@ export default function InboxScreen() {
           </View>
         </View>
 
+        {connectionError ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open workspaces to reconnect"
+            style={({ pressed }) => [styles.connectionNotice, pressed && styles.pressed]}
+            onPress={() => router.push("/hosts")}
+          >
+            <View style={styles.connectionDot} />
+            <Text style={styles.connectionText}>{connectionError}. Tap to reconnect.</Text>
+            <Icon name="chevronRight" size={16} color={colors.muted2} strokeWidth={2.1} />
+          </Pressable>
+        ) : null}
+
         <Text style={styles.sectionLabel}>Workspaces</Text>
 
         {hosts.length === 0 ? (
@@ -191,10 +209,13 @@ export default function InboxScreen() {
           </View>
         )}
 
-        <View style={styles.dockSpacer} />
+        <View style={[styles.dockSpacer, { height: 96 + bottomInset }]} />
       </ScrollView>
 
-      <View style={styles.composerDock} pointerEvents="box-none">
+      <View
+        style={[styles.composerDock, { bottom: Math.max(14, bottomInset + 10) }]}
+        pointerEvents="box-none"
+      >
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -209,7 +230,7 @@ export default function InboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 8 },
   topBar: {
     flexDirection: "row",
@@ -239,6 +260,18 @@ const styles = StyleSheet.create({
   grid: { gap: space.gap, marginBottom: 30, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
   sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
+  connectionNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radii.row,
+    backgroundColor: "#FFF4EA",
+  },
+  connectionDot: { width: 7, height: 7, borderRadius: radii.circle, backgroundColor: colors.needsAttention },
+  connectionText: { ...type.meta, color: colors.ink2, flex: 1 },
   workspaces: { gap: 0 },
   pressed: { opacity: 0.7 },
   loadingCard: {
@@ -275,6 +308,5 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 12,
     right: 12,
-    bottom: 18,
   },
 });

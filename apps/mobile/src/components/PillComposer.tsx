@@ -145,7 +145,8 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(252,252,252,0.92)",
+    // Cursor’s composer is a quiet, slightly sunken surface rather than a white card.
+    backgroundColor: "rgba(242,242,242,0.96)",
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.95)",
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
     ...shadows.floating,
   },
   card: {
-    backgroundColor: "rgba(252,252,252,0.96)",
+    backgroundColor: "rgba(242,242,242,0.98)",
     borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.95)",
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  roundIdle: { backgroundColor: colors.bgSunken },
+  roundIdle: { backgroundColor: "#E8E8E8" },
   roundReady: { backgroundColor: colors.ink },
   pressed: { opacity: 0.6 },
 });
