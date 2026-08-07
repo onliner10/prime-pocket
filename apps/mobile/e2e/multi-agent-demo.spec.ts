@@ -16,6 +16,14 @@ function currentPairCode(): string {
   return store.pairCode;
 }
 
+/** Geist is injected at runtime on web, so never shoot before it has loaded. */
+async function shot(page: import("@playwright/test").Page, name: string) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await page.screenshot({ path: join(OUT, name) });
+}
+
 async function clearApp(page: import("@playwright/test").Page) {
   await page.goto(EXPO, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
@@ -120,6 +128,6 @@ test.describe("Multi-agent conversation demo video", () => {
     });
     await page.waitForTimeout(2000);
 
-    await page.screenshot({ path: join(OUT, "demo-multi-agent-end.png") });
+    await shot(page, "demo-multi-agent-end.png");
   });
 });

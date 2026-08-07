@@ -17,6 +17,14 @@ function currentPairCode(): string {
   return store.pairCode;
 }
 
+/** Geist is injected at runtime on web, so never shoot before it has loaded. */
+async function shot(page: import("@playwright/test").Page, name: string) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await page.screenshot({ path: join(OUT, name) });
+}
+
 async function clearApp(page: import("@playwright/test").Page) {
   await page.goto(EXPO, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
@@ -45,21 +53,21 @@ test.describe("Prime Pocket mobile screenshots", () => {
     await clearApp(page);
     await expect(page.getByText("Inbox").first()).toBeVisible({ timeout: 20000 });
     await page.waitForTimeout(600);
-    await page.screenshot({ path: join(OUT, "01-inbox-empty.png") });
+    await shot(page, "01-inbox-empty.png");
 
     await pairViaUi(page, currentPairCode());
     await page.waitForTimeout(600);
-    await page.screenshot({ path: join(OUT, "02-inbox-paired.png") });
+    await shot(page, "02-inbox-paired.png");
 
     await page.goto(`${EXPO}/agents/needs_attention`, { waitUntil: "networkidle" });
     await expect(page.getByText("Nothing Needs Attention")).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(500);
-    await page.screenshot({ path: join(OUT, "03-needs-attention.png") });
+    await shot(page, "03-needs-attention.png");
 
     await page.goto(`${EXPO}/agents/all`, { waitUntil: "networkidle" });
     await expect(page.getByText("demo-welcome").first()).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(500);
-    await page.screenshot({ path: join(OUT, "04-all-agents.png") });
+    await shot(page, "04-all-agents.png");
 
     await page.getByText("demo-welcome").first().click();
     await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 15000 });
@@ -68,7 +76,7 @@ test.describe("Prime Pocket mobile screenshots", () => {
     );
     await page.getByPlaceholder("Follow up...").press("Enter");
     await page.waitForTimeout(3200);
-    await page.screenshot({ path: join(OUT, "05-agent-follow-up.png") });
+    await shot(page, "05-agent-follow-up.png");
 
     // Bidirectional images: phone→agent upload + agent→phone screenshot reply
     const TINY_PNG_B64 =
@@ -125,6 +133,37 @@ test.describe("Prime Pocket mobile screenshots", () => {
     await page.goto(`${EXPO}/agent/${agent.hostId}/${agent.id}`, { waitUntil: "networkidle" });
     await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(800);
-    await page.screenshot({ path: join(OUT, "06-agent-images.png") });
+    await shot(page, "06-agent-images.png");
+
+    // A long name so the top bar shows the reference's truncated centre title.
+    const longRes = await fetch(`${BRIDGE}/v1/agents`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${paired!.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Prime agent mobile experience polish",
+        prompt: "summarize the mobile typography pass and attach an artifact log",
+      }),
+    });
+    expect(longRes.ok).toBeTruthy();
+    const { agent: longAgent } = (await longRes.json()) as {
+      agent: { id: string; hostId: string };
+    };
+    for (let i = 0; i < 60; i++) {
+      const snapRes = await fetch(`${BRIDGE}/v1/agents/${longAgent.id}`, {
+        headers: { authorization: `Bearer ${paired!.token}` },
+      });
+      const snap = (await snapRes.json()) as { streaming: boolean; artifacts: unknown[] };
+      if (!snap.streaming && snap.artifacts.length > 0) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    await page.goto(`${EXPO}/agent/${longAgent.hostId}/${longAgent.id}`, {
+      waitUntil: "networkidle",
+    });
+    await expect(page.getByText("Changes")).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(600);
+    await shot(page, "07-agent-long-title.png");
   });
 });

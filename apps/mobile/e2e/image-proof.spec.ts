@@ -59,6 +59,14 @@ function currentPairCode(): string {
   return store.pairCode;
 }
 
+/** Geist is injected at runtime on web, so never shoot before it has loaded. */
+async function shot(page: import("@playwright/test").Page, name: string) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await page.screenshot({ path: join(OUT, name) });
+}
+
 async function clearApp(page: import("@playwright/test").Page) {
   await page.goto(EXPO, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => {
@@ -140,14 +148,14 @@ test("proof screenshots: both image directions", async ({ page }) => {
   await page.getByPlaceholder("Follow up...").fill("sending this photo from my phone");
   await expect(page.getByLabel("Remove image")).toBeVisible({ timeout: 5000 });
   await page.waitForTimeout(400);
-  await page.screenshot({ path: join(OUT, "proof-01-mobile-to-agent.png") });
+  await shot(page, "proof-01-mobile-to-agent.png");
 
   // Actually send image-only after clearing text to cover empty-message path
   await page.getByPlaceholder("Follow up...").fill("");
   await page.getByLabel("Send").click();
   await expect(page.getByText("Shared image").first()).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(600);
-  await page.screenshot({ path: join(OUT, "proof-01b-mobile-sent.png") });
+  await shot(page, "proof-01b-mobile-sent.png");
 
   // ========== 2) Agent → mobile ==========
   const launch = await fetch(`${BRIDGE}/v1/agents`, {
@@ -188,5 +196,5 @@ test("proof screenshots: both image directions", async ({ page }) => {
   await expect(page.getByText("demo-screenshot.png").first()).toBeVisible({ timeout: 15000 });
   await page.getByText("demo-screenshot.png").first().scrollIntoViewIfNeeded();
   await page.waitForTimeout(600);
-  await page.screenshot({ path: join(OUT, "proof-02-agent-to-mobile.png") });
+  await shot(page, "proof-02-agent-to-mobile.png");
 });

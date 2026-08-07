@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.chip,
   },
-  frameCompact: { width: 124, height: 84, borderRadius: 10 },
+  frameCompact: { width: 104, height: 72, borderRadius: 10 },
   image: { width: "100%", height: "100%" },
   broken: { alignItems: "center", justifyContent: "center" },
   brokenText: { ...type.meta, fontSize: 12, fontWeight: "600" },
