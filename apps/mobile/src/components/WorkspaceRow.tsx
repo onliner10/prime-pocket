@@ -18,10 +18,10 @@ export function WorkspaceRow({
       accessibilityRole="button"
       accessibilityLabel={name}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, card && styles.rowCard, pressed && card && styles.pressed]}
+      style={({ pressed }) => [styles.row, card ? styles.rowCard : styles.rowPlain, pressed && styles.pressed]}
     >
       <View style={styles.left}>
-        <View style={styles.folder}>
+        <View style={[styles.folder, !card && styles.folderPlain]}>
           <Icon name="folder" size={18} color={colors.ink2} strokeWidth={1.7} />
         </View>
         <Text style={styles.name} numberOfLines={1}>
@@ -48,8 +48,15 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     ...shadows.row,
   },
+  rowPlain: {
+    paddingVertical: 13,
+    paddingLeft: 0,
+    paddingRight: 3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
   pressed: { opacity: 0.7 },
-  left: { flexDirection: "row", alignItems: "center", gap: 13, flex: 1 },
+  left: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   folder: {
     width: 34,
     height: 34,
@@ -58,5 +65,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  name: { ...type.row, flex: 1 },
+  folderPlain: {
+    width: 24,
+    height: 24,
+    borderRadius: 0,
+    backgroundColor: "transparent",
+  },
+  name: { ...type.row, fontSize: 18, lineHeight: 23, flex: 1 },
 });

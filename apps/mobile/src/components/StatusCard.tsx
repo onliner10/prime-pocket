@@ -39,6 +39,8 @@ const styles = StyleSheet.create({
     minHeight: 108,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
     paddingHorizontal: 16,
     paddingTop: 15,
     paddingBottom: 16,

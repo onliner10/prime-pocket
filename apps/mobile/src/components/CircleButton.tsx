@@ -6,7 +6,7 @@ export function CircleButton({
   onPress,
   children,
   style,
-  size = 38,
+  size = 44,
   tone = "elevated",
   accessibilityLabel,
 }: {

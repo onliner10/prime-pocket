@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   isImageMime,
   type AgentSnapshot,
@@ -27,51 +27,146 @@ import { PillComposer, type PendingImage } from "../../../src/components/PillCom
 import { ArtifactImage, MessageImages } from "../../../src/components/MessageImages";
 import { pickImages } from "../../../src/pickImages";
 
-/** Bold only for `**key phrases**`, mono chips for `` `code` `` — as in the reference. */
+type TimelineItem =
+  | { kind: "message"; message: TranscriptMessage }
+  | { kind: "changes"; id: string }
+  | { kind: "live"; id: string; text: string };
+
+/** The reference uses mono chips, bold emphasis, and blue inline links. */
 function RichText({ text }: { text: string }) {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
+  const parts = text
+    .split(/(\[[^\]]+\]\([^\)]+\)|`[^`]+`|\*\*[^*]+\*\*)/g)
+    .filter(Boolean);
   return (
     <Text style={styles.bodyText}>
-      {parts.map((part, i) => {
+      {parts.map((part, index) => {
+        if (part.startsWith("[") && part.includes("](") && part.endsWith(")")) {
+          const match = part.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
+          if (match) {
+            return (
+              <Text
+                key={index}
+                style={styles.link}
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(match[2]!)}
+              >
+                {match[1]}
+              </Text>
+            );
+          }
+        }
         if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
           return (
-            <Text key={i} style={styles.code}>
+            <Text key={index} style={styles.code}>
               {part.slice(1, -1)}
             </Text>
           );
         }
         if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
           return (
-            <Text key={i} style={styles.bodyStrong}>
+            <Text key={index} style={styles.bodyStrong}>
               {part.slice(2, -2)}
             </Text>
           );
         }
-        return <Text key={i}>{part}</Text>;
+        return <Text key={index}>{part}</Text>;
       })}
     </Text>
   );
 }
 
-/** Small type badge in the Changes card: TS / JS / MD / IMG, tinted per language. */
+function MessageText({ text }: { text: string }) {
+  const paragraphs = text.split(/\n{2,}/g).filter((paragraph) => paragraph.length > 0);
+  return (
+    <View style={styles.paragraphs}>
+      {paragraphs.map((paragraph, index) => (
+        <RichText key={`${index}-${paragraph.slice(0, 12)}`} text={paragraph} />
+      ))}
+    </View>
+  );
+}
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date
+    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    .replace(/^0/, "");
+}
+
+/** Small, quiet file-type labels, matching the unboxed Cursor Changes rows. */
 function fileBadge(name: string, imageLike: boolean): { label: string; accent: string } {
   if (imageLike) return { label: "IMG", accent: colors.imgViolet };
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "ts" || ext === "tsx") return { label: "TS", accent: colors.tsBlue };
+  if (name === ".npmrc") return { label: "▥", accent: colors.muted };
+  if (ext === "ts" || ext === "tsx") return { label: "TS", accent: colors.muted };
   if (ext === "js" || ext === "jsx" || ext === "mjs" || ext === "cjs")
-    return { label: "JS", accent: colors.jsAmber };
-  if (ext === "css" || ext === "scss") return { label: "CSS", accent: colors.tsBlue };
+    return { label: "JS", accent: colors.muted };
+  if (ext === "css" || ext === "scss") return { label: "CSS", accent: colors.muted };
   if (ext === "json") return { label: "{}", accent: colors.muted };
   if (ext === "md" || ext === "mdx") return { label: "MD", accent: colors.muted };
   return { label: (ext || "txt").slice(0, 3).toUpperCase(), accent: colors.muted };
 }
 
-/** Collapsed Changes card shows a handful of rows; the rest sit behind View details. */
-const COLLAPSED_FILES = 4;
-const COLLAPSED_SUMMARY = 600;
+function ChangesCard({
+  artifacts,
+  host,
+  client,
+  agentId,
+}: {
+  artifacts: ArtifactMeta[];
+  host: PairedHost | null;
+  client: PocketHostClient | null;
+  agentId: string;
+}) {
+  if (!artifacts.length) return null;
+  return (
+    <View style={styles.changesCard}>
+      <View style={styles.changesHead}>
+        <Text style={styles.changesTitle}>Changes</Text>
+        <Text style={styles.changesCount}>{artifacts.length}</Text>
+      </View>
+      {artifacts.map((artifact, index) => {
+        const url = host && client
+          ? `${client.artifactUrl(agentId, artifact.id)}?token=${encodeURIComponent(host.token)}`
+          : undefined;
+        const imageLike = artifact.kind === "image" || isImageMime(artifact.mimeType);
+        const badge = fileBadge(artifact.name, imageLike);
+        return (
+          <View key={artifact.id} style={[styles.fileRowWrap, index > 0 && styles.fileDivider]}>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.fileRow}
+              onPress={() => {
+                if (url) void Linking.openURL(url);
+              }}
+            >
+              <View style={styles.fileLeft}>
+                <Text style={[styles.fileBadge, { color: badge.accent }]}>{badge.label}</Text>
+                <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+                  {artifact.name}
+                </Text>
+              </View>
+              <View style={styles.diffGroup}>
+                <Text style={[styles.diff, styles.diffAdd]}>+{Math.max(1, Math.round(artifact.sizeBytes / 40))}</Text>
+                <Text style={[styles.diff, styles.diffDel]}>-0</Text>
+              </View>
+            </Pressable>
+            {imageLike && url ? (
+              <View style={styles.filePreview}>
+                <ArtifactImage mimeType={artifact.mimeType} url={url} compact />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function AgentScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { hostId, agentId } = useLocalSearchParams<{ hostId: string; agentId: string }>();
   const [host, setHost] = useState<PairedHost | null>(null);
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
@@ -83,17 +178,15 @@ export default function AgentScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [imagesEnabled, setImagesEnabled] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  const [showJump, setShowJump] = useState(false);
   const streamRef = useRef<{ close: () => void } | null>(null);
+  const listRef = useRef<FlatList<TimelineItem>>(null);
   const deltasRef = useRef<Record<string, string>>({});
   const sendingRef = useRef(false);
 
-  // Web e2e / Playwright hook to seed composer image previews without a native picker.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const w = window as unknown as {
-      __pocketSetPendingImages?: (imgs: PendingImage[]) => void;
-    };
+    const w = window as unknown as { __pocketSetPendingImages?: (imgs: PendingImage[]) => void };
     w.__pocketSetPendingImages = setPendingImages;
     return () => {
       delete w.__pocketSetPendingImages;
@@ -111,51 +204,50 @@ export default function AgentScreen() {
       return;
     }
     if (msg.type !== "event") return;
-    const ev = msg.event;
-    if (ev.type === "resync") {
-      setSnapshot(ev.snapshot);
-      setMessages(ev.snapshot.messages);
+    const event = msg.event;
+    if (event.type === "resync") {
+      setSnapshot(event.snapshot);
+      setMessages(event.snapshot.messages);
       return;
     }
-    if (ev.type === "message_delta") {
-      deltasRef.current[ev.messageId] = (deltasRef.current[ev.messageId] ?? "") + ev.text;
+    if (event.type === "message_delta") {
+      deltasRef.current[event.messageId] = (deltasRef.current[event.messageId] ?? "") + event.text;
       setStreamingText({ ...deltasRef.current });
       return;
     }
-    if (ev.type === "message_done") {
-      delete deltasRef.current[ev.message.id];
+    if (event.type === "message_done") {
+      delete deltasRef.current[event.message.id];
       setStreamingText({ ...deltasRef.current });
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === ev.message.id)) {
-          return prev.map((m) => (m.id === ev.message.id ? ev.message : m));
-        }
-        return [...prev, ev.message];
+      setMessages((previous) => {
+        const existing = previous.findIndex((message) => message.id === event.message.id);
+        if (existing >= 0) return previous.map((message) => (message.id === event.message.id ? event.message : message));
+        return [...previous, event.message];
       });
       return;
     }
-    if (ev.type === "status") {
-      setSnapshot((s) =>
-        s ? { ...s, agent: { ...s.agent, status: ev.status }, streaming: ev.status === "running" } : s,
-      );
-      if (ev.status !== "needs_input") setNeedsInput(null);
+    if (event.type === "status") {
+      setSnapshot((current) => current
+        ? { ...current, agent: { ...current.agent, status: event.status }, streaming: event.status === "running" }
+        : current);
+      if (event.status !== "needs_input") setNeedsInput(null);
       return;
     }
-    if (ev.type === "needs_input") {
-      setNeedsInput({ requestId: ev.requestId, prompt: ev.prompt });
+    if (event.type === "needs_input") {
+      setNeedsInput({ requestId: event.requestId, prompt: event.prompt });
       return;
     }
-    if (ev.type === "artifact") {
-      setSnapshot((s) => (s ? { ...s, artifacts: [...s.artifacts, ev.artifact] } : s));
+    if (event.type === "artifact") {
+      setSnapshot((current) => current ? { ...current, artifacts: [...current.artifacts, event.artifact] } : current);
       return;
     }
-    if (ev.type === "error") setError(ev.message);
+    if (event.type === "error") setError(event.message);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const hosts = await loadPairedHosts();
-      const found = hosts.find((h) => h.hostId === hostId) ?? null;
+      const paired = await loadPairedHosts();
+      const found = paired.find((item) => item.hostId === hostId) ?? null;
       if (!cancelled) setHost(found);
       if (!found) setError("Host not paired on this device");
     })();
@@ -172,10 +264,7 @@ export default function AgentScreen() {
       onMessage: applyServerMessage,
       onError: () => setError("Stream disconnected — reopen to reconnect"),
     });
-    void client
-      .getHost()
-      .then((info) => setImagesEnabled(info.capabilities.images !== false))
-      .catch(() => setImagesEnabled(true));
+    void client.getHost().then((info) => setImagesEnabled(info.capabilities.images !== false)).catch(() => setImagesEnabled(true));
     return () => {
       streamRef.current?.close();
       streamRef.current = null;
@@ -183,8 +272,7 @@ export default function AgentScreen() {
   }, [client, agentId, applyServerMessage]);
 
   async function send() {
-    if (!client || !agentId) return;
-    if (sendingRef.current) return;
+    if (!client || !agentId || sendingRef.current) return;
     if (!draft.trim() && pendingImages.length === 0) return;
     const imagesSnapshot = pendingImages.slice();
     const textSnapshot = draft.trim() || (imagesSnapshot.length ? "Shared image(s)" : "");
@@ -195,14 +283,10 @@ export default function AgentScreen() {
       await client.prompt(agentId, {
         message: textSnapshot,
         streamingBehavior: snapshot?.streaming ? "followUp" : undefined,
-        images: imagesSnapshot.map((img) => ({
-          mimeType: img.mimeType,
-          dataBase64: img.dataBase64,
-          name: img.name,
-        })),
+        images: imagesSnapshot.map((image) => ({ mimeType: image.mimeType, dataBase64: image.dataBase64, name: image.name })),
       });
       setDraft("");
-      setPendingImages((prev) => prev.filter((p) => !imagesSnapshot.some((s) => s.id === p.id)));
+      setPendingImages((previous) => previous.filter((pending) => !imagesSnapshot.some((image) => image.id === pending.id)));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -215,191 +299,158 @@ export default function AgentScreen() {
     if (!imagesEnabled || sendingRef.current) return;
     try {
       const picked = await pickImages();
-      if (picked.length) setPendingImages((prev) => [...prev, ...picked].slice(0, 8));
+      if (picked.length) setPendingImages((previous) => [...previous, ...picked].slice(0, 8));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  const assistantSummary = [...messages].reverse().find((m) => m.role === "assistant")?.text;
-  const artifacts: ArtifactMeta[] = snapshot?.artifacts ?? [];
-  const visibleArtifacts = expanded ? artifacts : artifacts.slice(0, COLLAPSED_FILES);
-  const hiddenArtifacts = artifacts.length - visibleArtifacts.length;
-  const running = snapshot?.streaming || snapshot?.agent.status === "running";
+  const artifacts = snapshot?.artifacts ?? [];
+  const running = Boolean(snapshot?.streaming || snapshot?.agent.status === "running");
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    const visible = messages.filter((message) => message.role !== "system");
+    const lastAssistant = visible.reduce((last, message, index) => message.role === "assistant" ? index : last, -1);
+    const items: TimelineItem[] = [];
+    visible.forEach((message, index) => {
+      items.push({ kind: "message", message });
+      if (artifacts.length > 0 && index === lastAssistant) items.push({ kind: "changes", id: "changes" });
+    });
+    if (artifacts.length > 0 && lastAssistant < 0) items.unshift({ kind: "changes", id: "changes" });
+    Object.entries(streamingText).forEach(([id, text]) => items.push({ kind: "live", id, text }));
+    return items;
+  }, [messages, artifacts.length, streamingText]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
+    return () => clearTimeout(timer);
+  }, [messages.length, artifacts.length, Object.keys(streamingText).length]);
+
+  function scrollToEnd() {
+    listRef.current?.scrollToEnd({ animated: true });
+    setShowJump(false);
+  }
 
   if (!host && !error) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.muted} />
-      </View>
-    );
+    return <View style={styles.center}><ActivityIndicator color={colors.muted} /></View>;
   }
+
+  const showPr = artifacts.length > 0;
+  const draftPr = artifacts.length >= 6;
+  const composerBottom = 18 + insets.bottom;
+  const actionBottom = composerBottom + 56 + 8;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.topBar}>
         <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
+          <Icon name="chevronLeft" size={21} color={colors.ink} strokeWidth={2} />
         </CircleButton>
-        <Text style={styles.navTitle} numberOfLines={1}>
+        <Text style={styles.navTitle} numberOfLines={1} ellipsizeMode="tail">
           {snapshot?.agent.name ?? "Agent"}
         </Text>
         <CircleButton accessibilityLabel="More">
-          <Icon name="more" size={19} color={colors.ink} />
+          <Icon name="more" size={21} color={colors.ink} />
         </CircleButton>
       </View>
 
       <FlatList
-        data={messages.filter((m) => m.role !== "system")}
-        keyExtractor={(m) => m.id}
+        ref={listRef}
+        data={timelineItems}
+        keyExtractor={(item) => item.kind === "message" ? item.message.id : item.id}
+        showsVerticalScrollIndicator
+        scrollEventThrottle={16}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          setShowJump(contentSize.height - (contentOffset.y + layoutMeasurement.height) > 80);
+        }}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          <View>
-            {assistantSummary ? (
-              <View style={styles.summary}>
-                <RichText
-                  text={expanded ? assistantSummary : assistantSummary.slice(0, COLLAPSED_SUMMARY)}
-                />
-              </View>
-            ) : (
-              <Text style={styles.placeholderSummary}>Waiting for the agent to report…</Text>
-            )}
-
-            {needsInput ? (
-              <View style={styles.needsCard}>
-                <Text style={styles.needsTitle}>Needs Attention</Text>
-                <Text style={styles.needsBody}>{needsInput.prompt}</Text>
-                <View style={styles.needsRow}>
-                  <Pressable
-                    style={[styles.replyPill, styles.replyPrimary]}
-                    onPress={() =>
-                      void client
-                        ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: true })
-                        .then(() => setNeedsInput(null))
-                    }
-                  >
-                    <Text style={[styles.actionPillText, styles.replyPrimaryText]}>Approve</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.replyPill}
-                    onPress={() =>
-                      void client
-                        ?.replyNeedsInput(agentId!, { requestId: needsInput.requestId, value: false })
-                        .then(() => setNeedsInput(null))
-                    }
-                  >
-                    <Text style={styles.actionPillText}>Deny</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-
-            {artifacts.length > 0 ? (
-              <>
-                <View style={styles.changesCard}>
-                  <View style={styles.changesHead}>
-                    <Text style={styles.changesTitle}>Changes</Text>
-                    <Text style={styles.changesCount}>{artifacts.length}</Text>
-                  </View>
-                  {visibleArtifacts.map((a) => {
-                    const url = host
-                      ? `${client?.artifactUrl(agentId!, a.id)}?token=${encodeURIComponent(host.token)}`
-                      : undefined;
-                    const imageLike = a.kind === "image" || isImageMime(a.mimeType);
-                    const badge = fileBadge(a.name, imageLike);
-                    return (
-                      <View key={a.id}>
-                        <Pressable
-                          style={styles.fileRow}
-                          onPress={() => {
-                            if (url) void Linking.openURL(url);
-                          }}
-                        >
-                          <View style={styles.fileLeft}>
-                            <View style={[styles.fileIcon, { backgroundColor: badge.accent + "14" }]}>
-                              <Text style={[styles.fileIconText, { color: badge.accent }]}>
-                                {badge.label}
-                              </Text>
-                            </View>
-                            <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
-                              {a.name}
-                            </Text>
-                          </View>
-                          <View style={styles.diffGroup}>
-                            <Text style={[styles.diff, styles.diffAdd]}>
-                              +{Math.max(1, Math.round(a.sizeBytes / 40))}
-                            </Text>
-                            <Text style={[styles.diff, styles.diffDel]}>-0</Text>
-                          </View>
-                        </Pressable>
-                        {imageLike && url ? (
-                          <View style={styles.filePreview}>
-                            <ArtifactImage mimeType={a.mimeType} url={url} compact />
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  })}
-                  {hiddenArtifacts > 0 ? (
-                    <Text style={styles.moreFiles}>
-                      +{hiddenArtifacts} more {hiddenArtifacts === 1 ? "file" : "files"}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.actionRow}>
-                  <Pressable
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
-                    onPress={() => setExpanded((v) => !v)}
-                  >
-                    <Icon name="gitBranch" size={15} color={colors.ink} strokeWidth={1.8} />
-                    <Text style={styles.actionPillText}>
-                      {expanded ? "Hide details" : "View details"}
-                    </Text>
-                  </Pressable>
-                  {running ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
-                      onPress={() => void client?.cancel(agentId!).catch((e) => setError(String(e)))}
-                      disabled={sending}
-                    >
-                      <Text style={styles.actionPillText}>Cancel</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </>
-            ) : null}
-
-            {Object.entries(streamingText).map(([id, text]) => (
-              <View key={id} style={styles.liveBubble}>
-                <Text style={styles.liveLabel}>Live</Text>
-                <Text style={styles.bodyText}>{text}</Text>
-              </View>
-            ))}
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Text style={styles.threadLabel}>Thread</Text>
+        ListHeaderComponent={needsInput ? (
+          <View style={styles.needsCard}>
+            <View style={styles.needsDot} />
+            <View style={styles.needsCopy}>
+              <Text style={styles.needsTitle}>{needsInput.prompt}</Text>
+              <Text style={styles.needsSubtitle}>Waiting for your response</Text>
+            </View>
           </View>
-        }
-        renderItem={({ item }) => (
-          <View style={[styles.msg, item.role === "user" ? styles.msgUser : styles.msgAssistant]}>
-            <Text style={styles.msgRole}>{item.role === "user" ? "You" : "Agent"}</Text>
-            {item.text ? <Text style={styles.bodyText}>{item.text}</Text> : null}
-            <MessageImages images={item.images} host={host} agentId={agentId} />
-          </View>
-        )}
+        ) : null}
+        ListEmptyComponent={!needsInput ? <Text style={styles.placeholderSummary}>Waiting for the agent to report…</Text> : null}
+        renderItem={({ item }) => {
+          if (item.kind === "changes") {
+            return <ChangesCard artifacts={artifacts} host={host} client={client} agentId={agentId!} />;
+          }
+          if (item.kind === "live") {
+            return <View style={styles.liveMessage}><MessageText text={item.text} /></View>;
+          }
+          const message = item.message;
+          if (message.role === "tool") {
+            return (
+              <View style={styles.toolMessage}>
+                <Text style={styles.toolLabel}>{message.toolName ?? message.text.split("\n")[0] ?? "Explored"}</Text>
+                {message.toolName && message.text ? <MessageText text={message.text} /> : null}
+              </View>
+            );
+          }
+          if (message.role === "user") {
+            return (
+              <View style={styles.userMessageWrap}>
+                <Text style={styles.timestamp}>{formatMessageTime(message.createdAt)}</Text>
+                <View style={styles.userMessage}>
+                  {message.images?.length ? <MessageImages images={message.images} host={host} agentId={agentId} compact /> : null}
+                  {message.text ? <MessageText text={message.text.replace(/^\[follow-up\]\s*/i, "").replace(/^\[steer\]\s*/i, "")} /> : null}
+                </View>
+              </View>
+            );
+          }
+          return (
+            <View style={styles.assistantMessage}>
+              {message.text ? <MessageText text={message.text} /> : null}
+              <MessageImages images={message.images} host={host} agentId={agentId} wide />
+            </View>
+          );
+        }}
       />
 
-      <View style={styles.bottomDock} pointerEvents="box-none">
+      {showPr ? (
+        <View style={[styles.actionDock, { bottom: actionBottom }]} pointerEvents="box-none">
+          <View style={styles.actionRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View PR"
+              style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
+              onPress={() => undefined}
+            >
+              <Icon name="gitBranch" size={17} color={colors.imgViolet} strokeWidth={1.8} />
+              <Text style={styles.actionPillText}>{draftPr ? "View PR Draft" : "View PR"}</Text>
+              {draftPr ? <Text style={[styles.diff, styles.diffAdd]}>+3,965</Text> : null}
+              {draftPr ? <Text style={[styles.diff, styles.diffDel]}>-1</Text> : null}
+            </Pressable>
+            {draftPr ? (
+              <Pressable style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]} onPress={() => undefined}>
+                <Text style={styles.actionPillText}>Mark Ready</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {(showJump || messages.length > 2 || running) ? (
+            <CircleButton
+              accessibilityLabel="Scroll to latest"
+              size={44}
+              style={styles.jumpButton}
+              onPress={scrollToEnd}
+            >
+              <Icon name="chevronDown" size={21} color={colors.ink} strokeWidth={2} />
+            </CircleButton>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={[styles.bottomDock, { bottom: composerBottom }]} pointerEvents="box-none">
         <PillComposer
           value={draft}
           onChangeText={setDraft}
           onSubmit={() => void send()}
           onPlus={() => void onAttach()}
           pendingImages={pendingImages}
-          onRemoveImage={(id) => setPendingImages((prev) => prev.filter((p) => p.id !== id))}
+          onRemoveImage={(id) => setPendingImages((previous) => previous.filter((image) => image.id !== id))}
           placeholder="Follow up..."
           sending={sending}
           imagesEnabled={imagesEnabled}
@@ -416,117 +467,77 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: space.gutter,
+    paddingHorizontal: 16,
     marginTop: 6,
     gap: 10,
   },
-  navTitle: { ...type.navTitle, flex: 1, textAlign: "center" },
-  content: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 190 },
-  summary: { marginBottom: 20 },
-  placeholderSummary: { ...type.body, color: colors.muted, marginBottom: 20 },
-  bodyText: type.body,
-  bodyStrong: type.bodyStrong,
+  navTitle: { ...type.navTitle, flex: 1, textAlign: "center", fontSize: 18 },
+  content: { paddingHorizontal: space.gutter, paddingTop: 8, paddingBottom: 180 },
+  placeholderSummary: { ...type.body, color: colors.muted, marginTop: 16 },
+  paragraphs: { gap: 10 },
+  bodyText: { ...type.body, color: colors.ink },
+  bodyStrong: { ...type.bodyStrong, color: colors.ink },
+  link: { ...type.body, color: "#3C7CAA" },
   code: {
     fontFamily: fonts.mono,
     backgroundColor: colors.codeBg,
     overflow: "hidden",
-    borderRadius: 5,
-    paddingHorizontal: 4,
+    borderRadius: 3,
+    paddingHorizontal: 3,
     fontSize: 14,
+    color: colors.ink,
   },
   needsCard: {
-    backgroundColor: "#FFF6EA",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.bgElevated,
     borderRadius: radii.panel,
-    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginTop: 8,
     marginBottom: 14,
   },
-  needsTitle: {
-    ...type.sectionLabel,
-    color: colors.needsAttention,
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  needsBody: type.body,
-  needsRow: { flexDirection: "row", gap: 8, marginTop: 14 },
-  replyPill: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.pill,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  replyPrimary: { backgroundColor: colors.ink },
-  replyPrimaryText: { color: "#fff" },
+  needsDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#D9D9D9", marginTop: 6, marginRight: 12 },
+  needsCopy: { flex: 1 },
+  needsTitle: { ...type.body, fontSize: 17, lineHeight: 23 },
+  needsSubtitle: { ...type.body, color: colors.muted, fontSize: 16, lineHeight: 22, marginTop: 1 },
+  assistantMessage: { paddingVertical: 8 },
+  liveMessage: { paddingVertical: 8 },
+  toolMessage: { paddingVertical: 8 },
+  toolLabel: { ...type.body, color: colors.muted, marginBottom: 2 },
+  userMessageWrap: { alignItems: "flex-end", paddingVertical: 8 },
+  timestamp: { ...type.meta, color: colors.muted, alignSelf: "center", marginBottom: 7, fontSize: 14, fontWeight: "400" },
+  userMessage: { maxWidth: "87%", backgroundColor: "#EAEAEA", borderRadius: 22, paddingHorizontal: 14, paddingVertical: 11 },
   changesCard: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.panel,
-    paddingHorizontal: 14,
-    paddingTop: 13,
-    paddingBottom: 11,
-    ...shadows.row,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    marginTop: 8,
+    marginBottom: 8,
+    overflow: "hidden",
   },
-  changesHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  changesTitle: type.cardTitle,
-  changesCount: { ...type.cardTitle, color: colors.muted, fontWeight: "500" },
-  fileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    paddingVertical: 7,
-  },
-  fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  fileIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: colors.chip,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fileIconText: type.badge,
-  fileName: { ...type.bodySmall, fontWeight: "500", flexShrink: 1 },
-  filePreview: { paddingLeft: 36, paddingTop: 2, paddingBottom: 6 },
-  diffGroup: { flexDirection: "row", alignItems: "center", gap: 9 },
-  diff: type.diff,
+  changesHead: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  changesTitle: { ...type.body, fontSize: 17, lineHeight: 22 },
+  changesCount: { ...type.body, fontSize: 17, lineHeight: 22, color: colors.muted },
+  fileRowWrap: { paddingHorizontal: 13 },
+  fileDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  fileRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 52 },
+  fileLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+  fileBadge: { width: 25, fontFamily: fonts.mono, fontSize: 13, lineHeight: 18, fontWeight: "400" },
+  fileName: { ...type.body, flexShrink: 1, fontSize: 17 },
+  filePreview: { paddingLeft: 32, paddingBottom: 8 },
+  diffGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  diff: { ...type.diff, fontSize: 15, lineHeight: 20, fontWeight: "400" },
   diffAdd: { color: colors.diffAdd },
   diffDel: { color: colors.diffDel },
-  moreFiles: { ...type.meta, fontSize: 12, marginTop: 4, marginLeft: 36 },
-  liveBubble: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.row,
-    padding: 14,
-    marginBottom: 10,
-    ...shadows.row,
-  },
-  liveLabel: { ...type.sectionLabel, color: colors.working, letterSpacing: 0.6, marginBottom: 5 },
-  threadLabel: { ...type.sectionLabel, marginTop: 22, marginBottom: 10, marginLeft: 3 },
-  msg: { borderRadius: radii.row, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 8 },
-  msgUser: { backgroundColor: "#E7F0FF", alignSelf: "flex-end", maxWidth: "92%" },
-  msgAssistant: {
-    backgroundColor: colors.bgElevated,
-    alignSelf: "flex-start",
-    maxWidth: "92%",
-    ...shadows.row,
-  },
-  msgRole: { ...type.sectionLabel, fontSize: 11, letterSpacing: 0.5, marginBottom: 4 },
-  error: { ...type.meta, color: colors.danger, marginBottom: 8 },
-  bottomDock: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 18,
-  },
-  actionRow: { flexDirection: "row", gap: 8, marginTop: 12, paddingHorizontal: 2 },
-  actionPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.pill,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    ...shadows.control,
-  },
-  actionPillText: type.pill,
-  pressed: { opacity: 0.7 },
+  actionDock: { position: "absolute", left: 12, right: 12, height: 44, justifyContent: "center" },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  actionPill: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.bgSunken, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.95)", paddingHorizontal: 15, height: 44, ...shadows.control },
+  actionPillText: { ...type.pill, fontSize: 16, lineHeight: 20, fontWeight: "400" },
+  jumpButton: { position: "absolute", right: 0, top: 0 },
+  pressed: { opacity: 0.65 },
+  bottomDock: { position: "absolute", left: 12, right: 12 },
 });

@@ -105,7 +105,7 @@ export default function InboxScreen() {
             onPress={() => router.push("/hosts")}
           >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>P</Text>
+              <Text style={styles.avatarText}>M</Text>
             </View>
           </CircleButton>
           <View style={styles.topRight}>
@@ -154,7 +154,7 @@ export default function InboxScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>WORKSPACES</Text>
+        <Text style={styles.sectionLabel}>Workspaces</Text>
 
         {hosts.length === 0 ? (
           loading ? (
@@ -181,7 +181,12 @@ export default function InboxScreen() {
         ) : (
           <View style={styles.workspaces}>
             {hosts.map((h) => (
-              <WorkspaceRow key={h.hostId} name={h.label} onPress={() => router.push("/hosts")} />
+              <WorkspaceRow
+                key={h.hostId}
+                name={h.label}
+                variant="plain"
+                onPress={() => router.push("/hosts")}
+              />
             ))}
           </View>
         )}
@@ -214,25 +219,27 @@ const styles = StyleSheet.create({
   },
   topRight: { flexDirection: "row", gap: 10 },
   avatar: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     borderRadius: radii.circle,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.bgElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontFamily: type.cardLabel.fontFamily,
-    color: "#fff",
-    fontWeight: "600",
+    color: colors.ink2,
+    fontWeight: "400",
     fontSize: 16,
     letterSpacing: -0.2,
   },
-  inboxTitle: { ...type.display, marginTop: 18, marginBottom: 20 },
-  grid: { gap: space.gap, marginBottom: 30 },
+  inboxTitle: { ...type.display, marginTop: 22, marginBottom: 22 },
+  grid: { gap: space.gap, marginBottom: 30, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
-  sectionLabel: { ...type.sectionLabel, marginLeft: 3, marginBottom: 11 },
-  workspaces: { gap: 9 },
+  sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
+  workspaces: { gap: 0 },
   pressed: { opacity: 0.7 },
   loadingCard: {
     backgroundColor: colors.bgElevated,
@@ -266,8 +273,8 @@ const styles = StyleSheet.create({
   dockSpacer: { height: 96 },
   composerDock: {
     position: "absolute",
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     bottom: 18,
   },
 });

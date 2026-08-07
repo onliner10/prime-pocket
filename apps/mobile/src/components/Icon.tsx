@@ -12,6 +12,7 @@ export type IconName =
   | "checkCircle"
   | "chevronRight"
   | "chevronLeft"
+  | "chevronDown"
   | "plus"
   | "mic"
   | "arrowUp"
@@ -50,18 +51,20 @@ const ICONS: Record<IconName, Draw> = {
       strokeWidth={sw}
     />
   ),
-  // Arrows drawing inward from opposite corners — "every agent, one place".
+  // Four agents converging into one inbox.
   converge: (c, sw) => (
     <>
-      <Path d="M19.9 10.1h-6v-6M20.7 3.3l-6.8 6.8" stroke={c} strokeWidth={sw} />
-      <Path d="M4.1 13.9h6v6M3.3 20.7l6.8-6.8" stroke={c} strokeWidth={sw} />
+      <Path d="m4.2 4.2 7.1 2-5.1 5.1zM19.8 4.2l-2 7.1-5.1-5.1zM4.2 19.8l7.1-2-5.1-5.1zM19.8 19.8l-2-7.1-5.1 5.1z" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
     </>
   ),
-  crosshair: (c, sw) => (
+  // Working agents are shown as five small blue dots, not a target reticle.
+  crosshair: (c) => (
     <>
-      <Circle cx={12} cy={12} r={8.6} stroke={c} strokeWidth={sw} />
-      <Circle cx={12} cy={12} r={2.4} stroke={c} strokeWidth={sw} />
-      <Path d="M12 1.6v3.2M12 19.2v3.2M1.6 12h3.2M19.2 12h3.2" stroke={c} strokeWidth={sw} />
+      <Circle cx={12} cy={12} r={2.7} fill={c} />
+      <Circle cx={12} cy={4.5} r={2.1} fill={c} />
+      <Circle cx={19.5} cy={12} r={2.1} fill={c} />
+      <Circle cx={12} cy={19.5} r={2.1} fill={c} />
+      <Circle cx={4.5} cy={12} r={2.1} fill={c} />
     </>
   ),
   bell: (c, sw) => (
@@ -76,12 +79,13 @@ const ICONS: Record<IconName, Draw> = {
   ),
   checkCircle: (c, sw) => (
     <>
-      <Circle cx={12} cy={12} r={8.8} stroke={c} strokeWidth={sw} />
+      <Circle cx={12} cy={12} r={8.8} stroke={c} strokeWidth={sw} strokeDasharray="3 2.5" />
       <Path d="m8.4 12.3 2.6 2.6 4.9-5.4" stroke={c} strokeWidth={sw} />
     </>
   ),
   chevronRight: (c, sw) => <Path d="m9.5 5.5 6.5 6.5-6.5 6.5" stroke={c} strokeWidth={sw} />,
   chevronLeft: (c, sw) => <Path d="M14.5 5.5 8 12l6.5 6.5" stroke={c} strokeWidth={sw} />,
+  chevronDown: (c, sw) => <Path d="m5.5 9 6.5 6.5L18.5 9" stroke={c} strokeWidth={sw} />,
   plus: (c, sw) => <Path d="M12 4.8v14.4M4.8 12h14.4" stroke={c} strokeWidth={sw} />,
   mic: (c, sw) => (
     <>

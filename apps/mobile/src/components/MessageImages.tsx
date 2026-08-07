@@ -23,10 +23,14 @@ export function MessageImages({
   images,
   host,
   agentId,
+  compact = false,
+  wide = false,
 }: {
   images?: MessageImage[];
   host: PairedHost | null;
   agentId?: string;
+  compact?: boolean;
+  wide?: boolean;
 }) {
   if (!images?.length) return null;
   return (
@@ -37,6 +41,8 @@ export function MessageImages({
           image={img}
           host={host}
           agentId={agentId}
+          compact={compact}
+          wide={wide}
         />
       ))}
     </View>
@@ -61,10 +67,14 @@ function AuthImage({
   image,
   host,
   agentId,
+  compact = false,
+  wide = false,
 }: {
   image: MessageImage;
   host: PairedHost | null;
   agentId?: string;
+  compact?: boolean;
+  wide?: boolean;
 }) {
   const uri = useMemo(() => resolveImageUri(image, host, agentId), [image, host, agentId]);
   if (!isImageMime(image.mimeType)) {
@@ -81,21 +91,21 @@ function AuthImage({
       </View>
     );
   }
-  return <RemoteImage uri={uri} />;
+  return <RemoteImage uri={uri} compact={compact} wide={wide} />;
 }
 
-function RemoteImage({ uri, compact = false }: { uri: string; compact?: boolean }) {
+function RemoteImage({ uri, compact = false, wide = false }: { uri: string; compact?: boolean; wide?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
-      <View style={[styles.frame, compact && styles.frameCompact, styles.broken]}>
+      <View style={[styles.frame, compact && styles.frameCompact, wide && styles.frameWide, styles.broken]}>
         <Text style={styles.brokenText}>Failed</Text>
       </View>
     );
   }
   return (
-    <View style={[styles.frame, compact && styles.frameCompact]}>
+    <View style={[styles.frame, compact && styles.frameCompact, wide && styles.frameWide]}>
       {loading ? <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.muted} /> : null}
       <Image
         source={{ uri }}
@@ -107,6 +117,11 @@ function RemoteImage({ uri, compact = false }: { uri: string; compact?: boolean 
           setFailed(true);
         }}
       />
+      {wide ? (
+        <View style={styles.playButton}>
+          <View style={styles.playTriangle} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -120,8 +135,32 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.chip,
   },
-  frameCompact: { width: 104, height: 72, borderRadius: 10 },
+  frameCompact: { width: 72, height: 48, borderRadius: 10 },
+  frameWide: { width: "100%", height: 123, borderRadius: 6 },
   image: { width: "100%", height: "100%" },
+  playButton: {
+    position: "absolute",
+    top: 10,
+    left: "50%",
+    marginLeft: -18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(252,252,252,0.78)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playTriangle: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 7,
+    borderBottomWidth: 7,
+    borderLeftWidth: 11,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "#6E6E6E",
+    marginLeft: 3,
+  },
   broken: { alignItems: "center", justifyContent: "center" },
   brokenText: { ...type.meta, fontSize: 12, fontWeight: "600" },
 });

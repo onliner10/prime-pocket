@@ -119,9 +119,6 @@ export default function AgentsFilterScreen() {
         contentContainerStyle={filtered.length === 0 ? styles.emptyWrap : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <View style={[styles.emptyIcon, { backgroundColor: empty.accent + "14" }]}>
-              <Icon name={empty.icon} size={26} color={empty.accent} strokeWidth={1.8} />
-            </View>
             <Text style={styles.emptyTitle}>{empty.title}</Text>
             <Text style={styles.emptyBody}>{empty.body}</Text>
           </View>
@@ -184,22 +181,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   topRight: { flexDirection: "row", gap: 10 },
-  heading: { paddingHorizontal: space.gutter, marginTop: 18, marginBottom: 16 },
+  heading: { paddingHorizontal: space.gutter, marginTop: 22, marginBottom: 16 },
   title: type.display,
   subtitle: { ...type.meta, marginTop: 3 },
   list: { paddingHorizontal: space.gutter, paddingBottom: 130, gap: 10 },
-  emptyWrap: { flexGrow: 1, justifyContent: "center", paddingBottom: 130 },
-  empty: { alignItems: "center", paddingHorizontal: 40 },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.circle,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: { ...type.title, textAlign: "center" },
-  emptyBody: { ...type.body, color: colors.muted, textAlign: "center", marginTop: 6 },
+  emptyWrap: { flexGrow: 1, justifyContent: "center", paddingBottom: 115 },
+  empty: { alignItems: "center", paddingHorizontal: 30 },
+  emptyTitle: { ...type.body, color: colors.muted, fontSize: 19, lineHeight: 25, textAlign: "center" },
+  emptyBody: { ...type.body, color: colors.muted, fontSize: 17, lineHeight: 24, textAlign: "center", marginTop: 5 },
   row: {
     backgroundColor: colors.bgElevated,
     borderRadius: radii.card,
@@ -215,5 +204,5 @@ const styles = StyleSheet.create({
   badgeText: { ...type.meta, fontSize: 12 },
   meta: { ...type.meta, fontSize: 12, fontWeight: "400", marginTop: 3 },
   preview: { ...type.bodySmall, color: colors.ink2, marginTop: 8 },
-  composerDock: { position: "absolute", left: 16, right: 16, bottom: 18 },
+  composerDock: { position: "absolute", left: 12, right: 12, bottom: 18 },
 });

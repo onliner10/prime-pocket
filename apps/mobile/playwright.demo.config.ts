@@ -7,7 +7,7 @@ export default defineConfig({
   expect: { timeout: 25_000 },
   fullyParallel: false,
   retries: 0,
-  outputDir: "/opt/cursor/artifacts/demo-video",
+  outputDir: process.env.POCKET_DEMO_OUT ?? "/tmp/pocket-demo-video",
   use: {
     baseURL: "http://127.0.0.1:8081",
     trace: "off",

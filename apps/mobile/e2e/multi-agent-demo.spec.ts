@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 const EXPO = process.env.POCKET_EXPO_URL ?? "http://127.0.0.1:8081";
 const BRIDGE = process.env.POCKET_BRIDGE_URL ?? "http://127.0.0.1:17420";
-const OUT = process.env.POCKET_SHOT_DIR ?? "/opt/cursor/artifacts/screenshots";
+const OUT = process.env.POCKET_SHOT_DIR ?? process.env.POCKET_DEMO_OUT ?? "/tmp/pocket-demo";
 
 function currentPairCode(): string {
   const store = JSON.parse(readFileSync("/tmp/pocket-ui-test/bridge.json", "utf8")) as {

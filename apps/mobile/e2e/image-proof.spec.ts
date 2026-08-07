@@ -10,7 +10,7 @@ import { deflateSync } from "node:zlib";
 
 const EXPO = process.env.POCKET_EXPO_URL ?? "http://127.0.0.1:8081";
 const BRIDGE = process.env.POCKET_BRIDGE_URL ?? "http://127.0.0.1:17420";
-const OUT = process.env.POCKET_SHOT_DIR ?? "/opt/cursor/artifacts/screenshots";
+const OUT = process.env.POCKET_SHOT_DIR ?? process.env.POCKET_SCREENSHOT_DIR ?? "/tmp/pocket-shots";
 
 /** Build a solid-color PNG so previews are obvious in screenshots. */
 function solidPng(r: number, g: number, b: number, w = 96, h = 72): Buffer {
