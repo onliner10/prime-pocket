@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "orientation": "portrait",
   "scheme": "prime-pocket",
-  "userInterfaceStyle": "light",
+  "userInterfaceStyle": "automatic",
   "newArchEnabled": true,
   "icon": "./assets/icon.png",
   "splash": {
     "image": "./assets/splash.png",
     "resizeMode": "contain",
-    "backgroundColor": "#F2F2F2"
+    "backgroundColor": "#F7F7F7"
   },
   "ios": {
     "supportsTablet": true,
