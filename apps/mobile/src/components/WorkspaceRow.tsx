@@ -56,10 +56,11 @@ export function WorkspaceRow({
     <Frame
       card={card}
       selected={selected}
-      role="button"
+      role={onPress ? "button" : undefined}
       aria-label={subtitle ? `${name}, ${subtitle}` : name}
       aria-selected={selected}
       onPress={onPress}
+      cursor={onPress ? "pointer" : "default"}
       gap={10}
     >
       <IconTile bare={!card}>
@@ -75,7 +76,7 @@ export function WorkspaceRow({
           </SizableText>
         ) : null}
       </YStack>
-      <ChevronRight size={16} color="$color8" strokeWidth={2.1} />
+      {onPress ? <ChevronRight size={16} color="$color8" strokeWidth={2.1} /> : null}
     </Frame>
   );
 }

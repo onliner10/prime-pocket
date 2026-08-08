@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import { ChevronLeft, ChevronRight, Github, Plus } from "@tamagui/lucide-icons-2";
+import { useToastController } from "@tamagui/toast";
 import { ScrollView, SizableText, XStack, YStack } from "tamagui";
 import type { PairedHost } from "@prime-pocket/protocol";
 import { loadPairedHosts, removePairedHost, upsertPairedHost } from "../src/storage";
@@ -21,6 +22,7 @@ import {
 
 export default function HostsScreen() {
   const router = useRouter();
+  const toast = useToastController();
   const [hosts, setHosts] = useState<PairedHost[]>([]);
 
   useFocusEffect(
@@ -34,8 +36,12 @@ export default function HostsScreen() {
       const next = await reconnectPairedHost(host);
       await upsertPairedHost(next);
       setHosts(await loadPairedHosts());
+      toast.show("Reconnected", { message: next.label, customData: { theme: "success" } });
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      toast.show("Could not reconnect", {
+        message: e instanceof Error ? e.message : String(e),
+        customData: { theme: "danger" },
+      });
     }
   }
 

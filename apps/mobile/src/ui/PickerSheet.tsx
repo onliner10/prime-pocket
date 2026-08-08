@@ -35,8 +35,10 @@ export function PickerSheet({
         enterStyle={{ opacity: 0 }}
         exitStyle={{ opacity: 0 }}
       />
-      <Sheet.Handle bg="$color6" />
-      <Sheet.Frame bg="$color1" borderTopLeftRadius="$9" borderTopRightRadius="$9" px={14} pt={14}>
+      <Sheet.Frame bg="$color1" borderTopLeftRadius="$9" borderTopRightRadius="$9" px={14} pt={10}>
+        {/* Inside the frame, not above it, so the grabber reads as part of the
+            sheet rather than floating over the scrim. */}
+        <Sheet.Handle self="center" width={40} height={4} rounded={2} bg="$color6" mb={10} />
         <H4 fontSize="$6" fontWeight="600" color="$color" mb={6} ml={4}>
           {title}
         </H4>
