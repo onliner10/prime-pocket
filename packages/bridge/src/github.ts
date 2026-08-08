@@ -445,7 +445,9 @@ export function createGitHubProvider(opts: {
   getToken?: () => { token: string; login?: string } | undefined;
   setToken?: (auth: { token: string; login: string } | null) => void;
 }): GitHubProvider {
-  if (opts.mock || process.env.PRIME_POCKET_GITHUB_MOCK === "1") {
+  // PRIME_POCKET_GITHUB_MOCK=0 keeps live GitHub on a host that fell back to the demo backend.
+  const forced = process.env.PRIME_POCKET_GITHUB_MOCK;
+  if (forced === "1" || (opts.mock && forced !== "0")) {
     return new MockGitHubProvider();
   }
   const persisted = opts.getToken?.();
@@ -453,6 +455,7 @@ export function createGitHubProvider(opts: {
     token: persisted?.token ?? githubTokenFromEnv(),
     login: persisted?.login,
     setToken: opts.setToken,
+    apiBase: process.env.PRIME_POCKET_GITHUB_API?.trim() || undefined,
   });
   // A token from disk/env has no login yet; fetch it without blocking startup.
   void provider.refreshLogin();

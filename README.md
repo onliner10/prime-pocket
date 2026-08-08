@@ -73,6 +73,33 @@ Socket probe paths include `~/.prime/agent/daemon.sock`, `~/.prime-agent/daemon.
 
 > The Prime adapter speaks a thin JSONL probe today. Wire it to `DaemonAgentConnection` from prime-agent once you depend on that package for full session/event fidelity.
 
+## GitHub (host-side)
+
+Repositories and branches come from the bridge, never from a Pocket server. A live host uses a
+GitHub **personal access token** that stays on that machine — classic tokens need the `repo` scope,
+fine-grained tokens need read access to Contents and Metadata.
+
+Three ways to give the bridge a token, in the order it looks:
+
+```bash
+# 1. Paste it in the app: Connect GitHub → Personal access token → Connect GitHub.
+#    The bridge validates it against /user and saves it in ~/.prime-pocket/bridge.json.
+
+# 2. Store it from the CLI once
+prime-pocket bridge --github-token ghp_xxx
+
+# 3. Read it from the host environment (nothing persisted)
+PRIME_POCKET_GITHUB_TOKEN=ghp_xxx prime-pocket bridge
+```
+
+`GITHUB_TOKEN` works as a fallback for the env var. Disconnecting from the app deletes the stored
+token, and a token GitHub has revoked is dropped the next time the bridge validates it.
+
+`--demo` (or `PRIME_POCKET_GITHUB_MOCK=1`) serves a synthetic catalog instead, so demos and e2e
+runs need no credentials. A bridge with no Prime daemon falls back to the demo backend and its mock
+catalog too; set `PRIME_POCKET_GITHUB_MOCK=0` to keep live GitHub there. `PRIME_POCKET_GITHUB_API`
+points the client at a GitHub Enterprise API base. Browser OAuth is not implemented.
+
 ## Notifications (optional)
 
 Pocket does not run APNs/FCM. For remote “needs attention” alerts, point the bridge at a [ntfy](https://ntfy.sh) topic you own:
@@ -94,7 +121,7 @@ Features in v1:
 - Pair host (deep link / manual URL + code)
 - Multi-host fleet list
 - Workspaces = repositories/worktrees on a paired host (not the host itself)
-- Add repository from GitHub catalog (mock in `--demo`) or local folder path
+- Add repository from GitHub catalog (live token on the host, mock in `--demo`) or local folder path
 - Agent transcript with live WebSocket stream
 - Prompt / steer / follow-up / cancel
 - Needs-input approve/deny
@@ -107,7 +134,7 @@ Auth: `Authorization: Bearer <token>` (or `?token=` for WS/artifact opens).
 - `GET /v1/host`
 - `POST /v1/pair` — `{ pairCode, deviceLabel }`
 - `GET /v1/workspaces` / `POST /v1/workspaces` / `POST /v1/workspaces/from-github` / `DELETE /v1/workspaces/:id`
-- `GET /v1/github/status` / `GET /v1/github/repos` / `POST /v1/github/connect` (mock in demo)
+- `GET /v1/github/status` / `GET /v1/github/repos` / `POST /v1/github/connect` — `{ mode: "mock" | "token", token? }` / `POST /v1/github/disconnect`
 - `GET /v1/agents` / `POST /v1/agents`
 - `GET /v1/agents/:id`
 - `POST /v1/agents/:id/prompt|steer|follow-up|cancel|needs-input`

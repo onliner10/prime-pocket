@@ -376,6 +376,149 @@ describe("TokenGitHubProvider", () => {
   });
 });
 
+/** api.github.com stand-in that only honours one token, for the HTTP round trip below. */
+function scriptedGitHub(): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (new Headers(init?.headers).get("authorization") !== "Bearer ghp_secret") {
+      return new Response(JSON.stringify({ message: "Bad credentials" }), { status: 401 });
+    }
+    const bodies: Record<string, unknown> = {
+      "/user": { login: "octocat" },
+      "/user/repos": [repoPayload()],
+      "/repos/acme/checkout-web": repoPayload(),
+      "/repos/acme/checkout-web/branches": [
+        { name: "main", protected: true },
+        { name: "feat/cart-drawer" },
+      ],
+    };
+    const body = bodies[url.pathname];
+    if (!body) return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+}
+
+describe("github over the bridge API (token host)", () => {
+  it("connects with a pasted token, lists the catalog, and disconnects", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pocket-gh-live-"));
+    const port = await freePort();
+    try {
+      const store = new BridgeStore(dir, "gh-live-test");
+      const backend = new DemoBackend(store.data.identity.hostId, join(dir, "artifacts"));
+      const server = new BridgeServer({
+        store,
+        backend,
+        port,
+        tls: false,
+        github: new TokenGitHubProvider({
+          apiBase: API_BASE,
+          fetchImpl: scriptedGitHub(),
+          setToken: (auth) => {
+            if (auth) store.setGitHubAuth(auth);
+            else store.clearGitHubAuth();
+          },
+        }),
+      });
+      await server.start();
+      const base = `http://127.0.0.1:${port}`;
+      const pair = await fetch(`${base}/v1/pair`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pairCode: store.data.pairCode, deviceLabel: "test" }),
+      });
+      const { token } = (await pair.json()) as { token: string };
+      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+
+      const before = (await (await fetch(`${base}/v1/github/status`, { headers })).json()) as {
+        connected: boolean;
+        mockAvailable?: boolean;
+      };
+      assert.equal(before.connected, false);
+      assert.equal(before.mockAvailable, false);
+
+      const noToken = await fetch(`${base}/v1/github/connect`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ mode: "token" }),
+      });
+      assert.equal(noToken.status, 400);
+      assert.equal(((await noToken.json()) as { code?: string }).code, "github_token_required");
+
+      // A bad GitHub token must not answer 401 — the app reads that as a lost pairing.
+      const badToken = await fetch(`${base}/v1/github/connect`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ mode: "token", token: "ghp_bad" }),
+      });
+      assert.equal(badToken.status, 400);
+      assert.equal(((await badToken.json()) as { code?: string }).code, "github_token_invalid");
+
+      const connect = await fetch(`${base}/v1/github/connect`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ mode: "token", token: "ghp_secret" }),
+      });
+      assert.equal(connect.status, 200);
+      const connected = (await connect.json()) as {
+        connected: boolean;
+        mode: string;
+        mock: boolean;
+        login?: string;
+      };
+      assert.deepEqual(connected, {
+        connected: true,
+        mode: "token",
+        mock: false,
+        mockAvailable: false,
+        login: "octocat",
+      });
+      assert.equal(new BridgeStore(dir, "gh-live-test").getGitHubAuth()?.token, "ghp_secret");
+
+      const { repos } = (await (
+        await fetch(`${base}/v1/github/repos?q=checkout`, { headers })
+      ).json()) as { repos: Array<{ fullName: string; private: boolean }> };
+      assert.deepEqual(repos, [
+        {
+          id: "gh_42",
+          fullName: "acme/checkout-web",
+          description: "Storefront",
+          private: true,
+          defaultBranch: "main",
+          htmlUrl: "https://github.com/acme/checkout-web",
+          language: "TypeScript",
+        },
+      ]);
+
+      const { branches } = (await (
+        await fetch(`${base}/v1/github/repos/acme/checkout-web/branches`, { headers })
+      ).json()) as { branches: Array<{ name: string; isDefault?: boolean }> };
+      assert.equal(branches.find((b) => b.isDefault)?.name, "main");
+
+      const added = await fetch(`${base}/v1/workspaces/from-github`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ fullName: "acme/checkout-web" }),
+      });
+      assert.equal(added.status, 201);
+
+      const disconnect = await fetch(`${base}/v1/github/disconnect`, { method: "POST", headers });
+      assert.equal(((await disconnect.json()) as { connected: boolean }).connected, false);
+      assert.equal(new BridgeStore(dir, "gh-live-test").getGitHubAuth(), undefined);
+
+      const afterDisconnect = await fetch(`${base}/v1/github/repos`, { headers });
+      assert.equal(afterDisconnect.status, 401);
+      assert.equal(
+        ((await afterDisconnect.json()) as { code?: string }).code,
+        "github_disconnected",
+      );
+
+      await server.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("createGitHubProvider", () => {
   it("serves the mock catalog in demo mode", () => {
     const provider = createGitHubProvider({ mock: true });

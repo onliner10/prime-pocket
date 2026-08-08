@@ -115,7 +115,7 @@ export default function OnboardingScreen() {
                 ? `Signed in as ${github?.login ?? "GitHub"}${github?.mock ? " (mock)" : ""}`
                 : github?.mockAvailable
                   ? "Use mock GitHub for demos, or connect a real account on a live host."
-                  : "Authorize GitHub on the paired host."
+                  : "Paste a GitHub personal access token; the paired host keeps it."
             }
             done={githubReady}
             active={step === 2}
