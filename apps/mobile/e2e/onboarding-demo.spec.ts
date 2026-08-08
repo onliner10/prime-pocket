@@ -138,13 +138,17 @@ test.describe("Onboarding demo video", () => {
     await shot(page, "04-worktree-branch.png");
     await page.getByLabel("Create worktree").click();
 
-    await expect(page.getByLabel(/Worktree selector/).last()).toContainText("feat/hello-world", {
+    await expect(page.getByLabel(/Workspace selector/).last()).toContainText(
+      "acme/checkout-web",
+      { timeout: 20000 },
+    );
+    await expect(page.getByLabel(/Branch selector/).last()).toContainText("feat/hello-world", {
       timeout: 20000,
     });
     await page.waitForTimeout(1100);
     await shot(page, "05-worktree-ready.png");
 
-    // Step 5 — agent task on branch A (context chip stays on the composer)
+    // Step 5 — agent task on branch A (workspace + branch stay on the composer)
     const promptA = "Add a hello world script in TypeScript";
     const composerA = page.getByPlaceholder("Plan, ask, build...").last();
     await typeSlow(page, composerA, promptA.slice(0, 10), 40);
@@ -159,13 +163,13 @@ test.describe("Onboarding demo video", () => {
     await page.waitForTimeout(1000);
     await shot(page, "07-agent-task.png");
 
-    // Step 6 — back to inbox, open workspace, create second worktree
+    // Step 6 — back to inbox, open branch selector → create second worktree
     await page.getByLabel("Back").click();
     await expect(page.getByText("Workspaces", { exact: true }).first()).toBeVisible({
       timeout: 15000,
     });
     await page.waitForTimeout(700);
-    await page.getByRole("button", { name: /acme\/checkout-web/ }).first().click();
+    await page.getByLabel(/Branch selector/).last().click();
     await expect(page.getByText("Worktrees", { exact: true }).first()).toBeVisible({
       timeout: 15000,
     });
@@ -193,14 +197,18 @@ test.describe("Onboarding demo video", () => {
     await page.getByLabel("Create worktree").last().click();
 
     // Create worktree returns to Inbox with the new branch selected
-    await expect(page.getByLabel(/Worktree selector/).last()).toContainText("feat/cart-drawer", {
+    await expect(page.getByLabel(/Workspace selector/).last()).toContainText(
+      "acme/checkout-web",
+      { timeout: 20000 },
+    );
+    await expect(page.getByLabel(/Branch selector/).last()).toContainText("feat/cart-drawer", {
       timeout: 20000,
     });
     await page.waitForTimeout(800);
     await shot(page, "11-active-second-branch.png");
 
-    // Open workspace via composer context chip — shows both branch worktrees
-    await page.getByLabel(/Worktree selector/).last().click();
+    // Open workspace via branch chip — shows both branch worktrees
+    await page.getByLabel(/Branch selector/).last().click();
     await expect(page.getByText("Worktrees", { exact: true }).last()).toBeVisible({
       timeout: 15000,
     });
@@ -215,7 +223,7 @@ test.describe("Onboarding demo video", () => {
 
     // Re-select cart-drawer (already active) then run the second task
     await page.getByLabel("Select worktree feat/cart-drawer").last().click();
-    await expect(page.getByLabel(/Worktree selector/).last()).toContainText("feat/cart-drawer", {
+    await expect(page.getByLabel(/Branch selector/).last()).toContainText("feat/cart-drawer", {
       timeout: 15000,
     });
     await page.waitForTimeout(700);
@@ -232,7 +240,7 @@ test.describe("Onboarding demo video", () => {
       timeout: 15000,
     });
     await page.waitForTimeout(600);
-    await page.getByLabel(/Worktree selector/).last().click();
+    await page.getByLabel(/Branch selector/).last().click();
     await expect(page.getByLabel("Select worktree feat/hello-world").last()).toBeVisible({
       timeout: 10000,
     });
@@ -243,7 +251,11 @@ test.describe("Onboarding demo video", () => {
     await shot(page, "13-two-branches-final.png");
 
     await page.getByLabel("Select worktree feat/hello-world").last().click();
-    await expect(page.getByLabel(/Worktree selector/).last()).toContainText("feat/hello-world", {
+    await expect(page.getByLabel(/Workspace selector/).last()).toContainText(
+      "acme/checkout-web",
+      { timeout: 15000 },
+    );
+    await expect(page.getByLabel(/Branch selector/).last()).toContainText("feat/hello-world", {
       timeout: 15000,
     });
     await page.waitForTimeout(1400);

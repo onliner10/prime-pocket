@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -44,6 +45,7 @@ export default function InboxScreen() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [launching, setLaunching] = useState(false);
+  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -121,17 +123,16 @@ export default function InboxScreen() {
       : selectedWorkspace
         ? (worktreesByWorkspace[selectedWorkspace.id] ?? [])[0]
         : undefined;
-  const repoShort =
-    selectedWorkspace?.name ??
-    selectedWorkspace?.fullName?.split("/").pop() ??
-    null;
-  const composerContextLabel = selectedWorktree
-    ? `${repoShort ?? "repo"} · ${selectedWorktree.branch}`
+  const workspaceLabel = selectedWorkspace
+    ? selectedWorkspace.fullName ?? selectedWorkspace.name
     : hosts.length === 0
       ? "Pair a host"
-      : workspaces.length === 0
-        ? "Add repository"
-        : "Select worktree";
+      : "Add repository";
+  const branchLabel = selectedWorktree
+    ? selectedWorktree.branch
+    : selectedWorkspace
+      ? "Select branch"
+      : null;
 
   function goAddRepository() {
     if (hosts.length === 0) {
@@ -369,21 +370,97 @@ export default function InboxScreen() {
           onSubmit={() => void submitComposer()}
           sending={launching}
           placeholder="Plan, ask, build..."
-          contextLabel={composerContextLabel}
-          contextHint={selectedWorkspace?.fullName ?? selectedWorkspace?.name ?? null}
-          onContextPress={() => {
+          workspaceLabel={workspaceLabel}
+          branchLabel={branchLabel}
+          workspaceIcon={selectedWorkspace?.source === "github" ? "github" : "folder"}
+          onWorkspacePress={() => {
             if (hosts.length === 0) {
               router.push("/pair");
               return;
             }
-            if (!selectedWorkspace) {
+            if (workspaces.length === 0) {
               goAddRepository();
+              return;
+            }
+            setWorkspacePickerOpen(true);
+          }}
+          onBranchPress={() => {
+            if (!selectedWorkspace) {
+              if (hosts.length === 0) router.push("/pair");
+              else goAddRepository();
               return;
             }
             void openWorkspace(selectedWorkspace);
           }}
         />
       </View>
+
+      <Modal
+        visible={workspacePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWorkspacePickerOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setWorkspacePickerOpen(false)}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Workspace</Text>
+            {workspaces.map((w) => {
+              const selected = w.id === selectedWorkspace?.id;
+              return (
+                <Pressable
+                  key={w.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select workspace ${w.fullName ?? w.name}`}
+                  onPress={() => {
+                    void (async () => {
+                      setSelectedWorkspaceId(w.id);
+                      await saveSelectedWorkspaceId(w.hostId, w.id);
+                      const trees = worktreesByWorkspace[w.id] ?? [];
+                      const nextTree =
+                        trees.find((t) => t.id === selectedWorktreeId) ?? trees[0];
+                      setSelectedWorktreeId(nextTree?.id ?? null);
+                      if (nextTree) await saveSelectedWorktreeId(w.hostId, nextTree.id);
+                      setWorkspacePickerOpen(false);
+                    })();
+                  }}
+                  style={({ pressed }) => [
+                    styles.modalRow,
+                    selected && styles.modalRowSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Icon
+                    name={w.source === "github" ? "github" : "folder"}
+                    size={18}
+                    color={colors.ink2}
+                    strokeWidth={1.7}
+                  />
+                  <Text style={styles.modalRowText} numberOfLines={1}>
+                    {w.fullName ?? w.name}
+                  </Text>
+                  {selected ? (
+                    <Icon name="checkCircle" size={18} color={colors.ink} strokeWidth={1.8} />
+                  ) : (
+                    <View style={{ width: 18 }} />
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add repository"
+              onPress={() => {
+                setWorkspacePickerOpen(false);
+                goAddRepository();
+              }}
+              style={({ pressed }) => [styles.modalAdd, pressed && styles.pressed]}
+            >
+              <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
+              <Text style={styles.modalAddText}>Add repository</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -419,6 +496,44 @@ const styles = StyleSheet.create({
   grid: { gap: space.gap, marginBottom: 22, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
   sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 32, 0.35)",
+    justifyContent: "flex-end",
+    padding: 16,
+    paddingBottom: 28,
+  },
+  modalSheet: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 10,
+    maxHeight: "70%",
+  },
+  modalTitle: { ...type.row, fontSize: 17, fontWeight: "600", marginBottom: 10, marginLeft: 4 },
+  modalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  modalRowSelected: { backgroundColor: "#F0F4F8" },
+  modalRowText: { ...type.row, fontSize: 16, flex: 1 },
+  modalAdd: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  modalAddText: { ...type.row, fontSize: 15, color: colors.ink2, fontWeight: "500" },
+
   connectionNotice: {
     flexDirection: "row",
     alignItems: "center",
