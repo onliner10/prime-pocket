@@ -1,7 +1,9 @@
 import type { AgentStatus, AgentSummary } from "@prime-pocket/protocol";
-import { colors } from "./theme";
 
 export type InboxFilter = "all" | "working" | "needs_attention" | "in_review";
+
+/** Tamagui child theme that carries a status' colour in both schemes. */
+export type StatusTheme = "agents" | "working" | "attention" | "review" | "danger";
 
 export function filterAgents(agents: AgentSummary[], filter: InboxFilter): AgentSummary[] {
   switch (filter) {
@@ -43,18 +45,18 @@ export function statusLabel(status: AgentStatus): string {
   }
 }
 
-export function statusAccent(status: AgentStatus): string {
+export function statusTheme(status: AgentStatus): StatusTheme | undefined {
   switch (status) {
     case "running":
-      return colors.working;
+      return "working";
     case "needs_input":
-      return colors.needsAttention;
+      return "attention";
     case "error":
-      return colors.danger;
+      return "danger";
     case "idle":
     case "saved":
-      return colors.inReview;
+      return "review";
     default:
-      return colors.muted2;
+      return undefined;
   }
 }

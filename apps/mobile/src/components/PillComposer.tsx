@@ -1,16 +1,25 @@
+import type { ComponentType } from "react";
 import { useState } from "react";
+import type { IconProps } from "@tamagui/helpers-icon";
 import {
+  ArrowUp,
+  ChevronDown,
+  GitBranch,
+  Github,
+  Mic,
+  Plus,
+  X,
+} from "@tamagui/lucide-icons-2";
+import {
+  Button,
   Image,
-  Platform,
-  Pressable,
+  Input,
   ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { colors, radii, shadows, type } from "../theme";
-import { Icon, type IconName } from "./Icon";
+  SizableText,
+  styled,
+  XStack,
+  YStack,
+} from "tamagui";
 
 export type PendingImage = {
   id: string;
@@ -20,41 +29,78 @@ export type PendingImage = {
   name?: string;
 };
 
-type ContextChipProps = {
-  label: string;
-  accessibilityLabel: string;
-  icon: IconName;
-  onPress?: () => void;
-  disabled?: boolean;
-  flex?: boolean;
-};
+const RoundButton = styled(Button, {
+  name: "ComposerRoundButton",
+  circular: true,
+  width: 42,
+  height: 42,
+  p: 0,
+  bg: "$color4",
+  borderWidth: 0,
+  transition: "quicker",
+  hoverStyle: { bg: "$color5" },
+  pressStyle: { bg: "$color5", scale: 0.9 },
+  disabledStyle: { opacity: 1 },
 
+  variants: {
+    ready: {
+      true: {
+        theme: "accent",
+        bg: "$background",
+        hoverStyle: { bg: "$backgroundHover" },
+        pressStyle: { bg: "$backgroundPress", scale: 0.9 },
+      },
+    },
+  } as const,
+});
+
+/** Repository / branch selector shown above the prompt field. */
 function ContextChip({
   label,
-  accessibilityLabel,
-  icon,
+  ariaLabel,
+  icon: Icon,
   onPress,
   disabled,
-  flex,
-}: ContextChipProps) {
+}: {
+  label: string;
+  ariaLabel: string;
+  icon: ComponentType<IconProps>;
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      disabled={disabled || !onPress}
-      style={({ pressed }) => [
-        styles.contextChip,
-        flex && styles.contextChipFlex,
-        pressed && styles.pressed,
-      ]}
+    <XStack
+      role="button"
+      aria-label={ariaLabel}
+      onPress={disabled || !onPress ? undefined : onPress}
+      items="center"
+      gap={5}
+      grow={1}
+      shrink={1}
+      minW={0}
+      maxW="100%"
+      px={10}
+      py={6}
+      rounded={999}
+      bg="$color3"
+      cursor="pointer"
+      transition="quicker"
+      hoverStyle={{ bg: "$color4" }}
+      pressStyle={{ bg: "$color4", scale: 0.98 }}
     >
-      <Icon name={icon} size={14} color={colors.ink2} strokeWidth={1.8} />
-      <Text style={styles.contextText} numberOfLines={1}>
+      <Icon size={14} color="$color10" strokeWidth={1.8} />
+      <SizableText
+        shrink={1}
+        fontSize="$3"
+        fontWeight="600"
+        color="$color"
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
         {label}
-      </Text>
-      <Icon name="chevronDown" size={14} color={colors.muted} strokeWidth={2.2} />
-    </Pressable>
+      </SizableText>
+      <ChevronDown size={14} color="$color9" strokeWidth={2.2} />
+    </XStack>
   );
 }
 
@@ -64,7 +110,7 @@ function ContextChip({
  *
  * Focused (or with attachments) it expands into a sheet so the text field
  * stays clearly visible above the keyboard. Tree shape stays stable across
- * focus so the TextInput is not remounted (which would dismiss the keyboard).
+ * focus so the input is not remounted (which would dismiss the keyboard).
  */
 export function PillComposer({
   value,
@@ -81,7 +127,7 @@ export function PillComposer({
   branchLabel,
   onWorkspacePress,
   onBranchPress,
-  workspaceIcon = "github",
+  workspaceIcon = Github,
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -99,7 +145,7 @@ export function PillComposer({
   branchLabel?: string | null;
   onWorkspacePress?: () => void;
   onBranchPress?: () => void;
-  workspaceIcon?: IconName;
+  workspaceIcon?: ComponentType<IconProps>;
 }) {
   const [focused, setFocused] = useState(false);
   const hasImages = pendingImages.length > 0;
@@ -113,107 +159,132 @@ export function PillComposer({
   }
 
   const plusButton = imagesEnabled ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Add"
-      onPress={onPlus}
-      style={({ pressed }) => [styles.round, styles.roundIdle, pressed && styles.pressed]}
-      disabled={sending}
-    >
-      <Icon name="plus" size={20} color={colors.ink} strokeWidth={2} />
-    </Pressable>
+    <RoundButton aria-label="Add" onPress={onPlus} disabled={sending}>
+      <Plus size={20} color="$color" strokeWidth={2} />
+    </RoundButton>
   ) : (
-    <View style={styles.round} />
+    <YStack width={42} height={42} />
   );
 
   const sendButton = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Send"
-      onPress={onSubmit}
-      style={({ pressed }) => [
-        styles.round,
-        canSend ? styles.roundReady : styles.roundIdle,
-        pressed && styles.pressed,
-      ]}
-      disabled={!canSend}
-    >
+    <RoundButton aria-label="Send" ready={canSend} onPress={onSubmit} disabled={!canSend}>
       {canSend ? (
-        <Icon name="arrowUp" size={19} color="#fff" strokeWidth={2.1} />
+        <ArrowUp size={19} color="$color" strokeWidth={2.1} />
       ) : (
-        <Icon name="mic" size={19} color={colors.muted} strokeWidth={1.85} />
+        <Mic size={19} color="$color9" strokeWidth={1.85} />
       )}
-    </Pressable>
+    </RoundButton>
   );
 
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
-      <View style={[styles.surface, expanded ? styles.sheet : styles.pill]}>
-        <View
-          style={[styles.handle, !expanded && styles.handleHidden]}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
+    <YStack width="100%" pointerEvents="box-none">
+      <YStack
+        bg={expanded ? "$color1" : "$color2"}
+        rounded={expanded ? 24 : 999}
+        px={expanded ? 10 : 6}
+        pt={expanded ? 8 : 6}
+        pb={expanded ? 7 : 6}
+        borderWidth={1}
+        borderColor="$color3"
+        shadowColor="$shadowColor"
+        shadowOpacity={1}
+        shadowRadius={20}
+        shadowOffset={{ width: 0, height: 8 }}
+        elevationAndroid={8}
+        transition="quick"
+      >
+        <YStack
+          self="center"
+          width={36}
+          height={expanded ? 4 : 0}
+          mb={expanded ? 8 : 0}
+          opacity={expanded ? 1 : 0}
+          rounded={2}
+          bg="$color5"
+          aria-hidden
         />
 
         {hasContext ? (
-          <View style={styles.contextRow}>
+          <XStack items="center" gap={6} mb={2} px={2}>
             {workspaceLabel?.trim() ? (
               <ContextChip
                 label={workspaceLabel.trim()}
-                accessibilityLabel={`Workspace selector, ${workspaceLabel.trim()}`}
+                ariaLabel={`Workspace selector, ${workspaceLabel.trim()}`}
                 icon={workspaceIcon}
                 onPress={onWorkspacePress}
                 disabled={sending}
-                flex
               />
             ) : null}
             {branchLabel?.trim() ? (
               <ContextChip
                 label={branchLabel.trim()}
-                accessibilityLabel={`Branch selector, ${branchLabel.trim()}`}
-                icon="gitBranch"
+                ariaLabel={`Branch selector, ${branchLabel.trim()}`}
+                icon={GitBranch}
                 onPress={onBranchPress}
                 disabled={sending}
-                flex
               />
             ) : null}
-          </View>
+          </XStack>
         ) : null}
 
         {hasImages ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.previews}
-            contentContainerStyle={styles.previewsContent}
+            maxH={88}
+            mb={2}
+            contentContainerStyle={{ flexDirection: "row", paddingBottom: 4 }}
           >
             {pendingImages.map((img) => (
-              <View key={img.id} style={styles.previewWrap}>
-                <Image source={{ uri: img.uri }} style={styles.preview} />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove image"
-                  style={styles.remove}
-                  onPress={() => onRemoveImage?.(img.id)}
+              <YStack key={img.id} mr={10} enterStyle={{ opacity: 0, scale: 0.9 }} transition="quick">
+                <Image source={{ uri: img.uri }} width={72} height={72} rounded={14} bg="$color3" />
+                <Button
+                  aria-label="Remove image"
+                  circular
+                  position="absolute"
+                  t={4}
+                  r={4}
+                  width={22}
+                  height={22}
+                  p={0}
+                  bg="$shadow7"
+                  borderWidth={0}
                   hitSlop={8}
                   disabled={sending}
+                  onPress={() => onRemoveImage?.(img.id)}
                 >
-                  <Icon name="close" size={11} color="#fff" strokeWidth={2.6} />
-                </Pressable>
-              </View>
+                  <X size={11} color="$color1" strokeWidth={2.6} />
+                </Button>
+              </YStack>
             ))}
           </ScrollView>
         ) : null}
 
-        <View style={[styles.row, expanded && styles.rowExpanded]}>
-          {!expanded ? plusButton : null}
-          <TextInput
+        <XStack items={expanded ? "stretch" : "center"}>
+          {expanded ? null : plusButton}
+          <Input
             key="composer-input"
-            style={[styles.input, expanded && styles.inputExpanded]}
+            grow={1}
+            shrink={1}
+            minW={0}
+            unstyled
+            bg="transparent"
+            borderWidth={0}
+            outlineWidth={0}
+            color="$color"
+            fontFamily="$body"
+            fontSize="$6"
+            lineHeight={21}
+            px={11}
+            py={8}
+            minH={expanded ? 88 : 42}
+            maxH={expanded ? 160 : undefined}
+            pt={expanded ? 6 : 8}
+            pb={expanded ? 8 : 8}
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor={colors.muted2}
+            placeholderTextColor="$color8"
             onFocus={() => setFocus(true)}
             onBlur={() => setFocus(false)}
             onSubmitEditing={() => {
@@ -225,133 +296,17 @@ export function PillComposer({
             editable={!sending}
             textAlignVertical={expanded ? "top" : "center"}
           />
-          {!expanded ? sendButton : null}
-        </View>
+          {expanded ? null : sendButton}
+        </XStack>
 
         {expanded ? (
-          <View style={styles.toolbar}>
+          <XStack items="center" mt={2}>
             {plusButton}
-            <View style={styles.toolbarSpacer} />
+            <YStack grow={1} />
             {sendButton}
-          </View>
+          </XStack>
         ) : null}
-      </View>
-    </View>
+      </YStack>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { width: "100%" },
-  surface: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.95)",
-    ...shadows.floating,
-  },
-  pill: {
-    flexDirection: "column",
-    backgroundColor: "rgba(242,242,242,0.96)",
-    borderRadius: radii.pill,
-    padding: 6,
-  },
-  sheet: {
-    backgroundColor: "rgba(252,252,252,0.98)",
-    borderRadius: 24,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 7,
-  },
-  handle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(0,0,0,0.12)",
-    marginBottom: 8,
-  },
-  handleHidden: {
-    height: 0,
-    marginBottom: 0,
-    opacity: 0,
-    overflow: "hidden",
-  },
-  contextRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 2,
-    paddingHorizontal: 2,
-  },
-  contextChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#F0F2F5",
-    maxWidth: "100%",
-  },
-  contextChipFlex: {
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  contextText: {
-    ...type.meta,
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: "600",
-    flexShrink: 1,
-    letterSpacing: -0.2,
-  },
-  previews: { maxHeight: 88, marginBottom: 2 },
-  previewsContent: { flexDirection: "row", alignItems: "flex-start", paddingBottom: 4 },
-  previewWrap: { marginRight: 10, position: "relative" },
-  preview: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.chip },
-  remove: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "rgba(0,0,0,0.66)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rowExpanded: {
-    alignItems: "stretch",
-  },
-  input: {
-    ...type.input,
-    flex: 1,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    minHeight: 42,
-    borderWidth: 0,
-    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
-  },
-  inputExpanded: {
-    minHeight: 88,
-    maxHeight: 160,
-    paddingTop: 6,
-    paddingBottom: 8,
-    textAlignVertical: "top",
-  },
-  toolbar: { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  toolbarSpacer: { flex: 1 },
-  round: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.circle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  roundIdle: { backgroundColor: "#E8E8E8" },
-  roundReady: { backgroundColor: colors.ink },
-  pressed: { opacity: 0.6 },
-});

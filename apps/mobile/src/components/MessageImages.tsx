@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { isImageMime, Routes, type MessageImage, type PairedHost } from "@prime-pocket/protocol";
-import { colors, type } from "../theme";
+import { Play } from "@tamagui/lucide-icons-2";
+import { Image, SizableText, Spinner, styled, XStack, YStack } from "tamagui";
 
 export function resolveImageUri(
   image: MessageImage,
@@ -19,6 +19,27 @@ export function resolveImageUri(
   return null;
 }
 
+const Frame = styled(YStack, {
+  name: "ImageFrame",
+  width: 160,
+  height: 110,
+  rounded: 14,
+  overflow: "hidden",
+  bg: "$color3",
+
+  variants: {
+    compact: {
+      true: { width: 72, height: 48, rounded: 10 },
+    },
+    wide: {
+      true: { width: "100%", height: 123, rounded: 6 },
+    },
+    broken: {
+      true: { items: "center", justify: "center" },
+    },
+  } as const,
+});
+
 export function MessageImages({
   images,
   host,
@@ -34,7 +55,7 @@ export function MessageImages({
 }) {
   if (!images?.length) return null;
   return (
-    <View style={styles.row}>
+    <XStack flexWrap="wrap" gap={8} mt={8}>
       {images.map((img, idx) => (
         <AuthImage
           key={`${img.artifactId ?? "inline"}-${img.name ?? "img"}-${idx}`}
@@ -45,7 +66,7 @@ export function MessageImages({
           wide={wide}
         />
       ))}
-    </View>
+    </XStack>
   );
 }
 
@@ -63,6 +84,16 @@ export function ArtifactImage({
   return <RemoteImage uri={url} compact={compact} />;
 }
 
+function Broken({ label, compact, wide }: { label: string; compact?: boolean; wide?: boolean }) {
+  return (
+    <Frame broken compact={compact} wide={wide}>
+      <SizableText fontSize="$2" fontWeight="600" color="$color9">
+        {label}
+      </SizableText>
+    </Frame>
+  );
+}
+
 function AuthImage({
   image,
   host,
@@ -77,40 +108,37 @@ function AuthImage({
   wide?: boolean;
 }) {
   const uri = useMemo(() => resolveImageUri(image, host, agentId), [image, host, agentId]);
-  if (!isImageMime(image.mimeType)) {
-    return (
-      <View style={[styles.frame, styles.broken]}>
-        <Text style={styles.brokenText}>Unsupported</Text>
-      </View>
-    );
-  }
-  if (!uri) {
-    return (
-      <View style={[styles.frame, styles.broken]}>
-        <Text style={styles.brokenText}>Missing</Text>
-      </View>
-    );
-  }
+  if (!isImageMime(image.mimeType)) return <Broken label="Unsupported" />;
+  if (!uri) return <Broken label="Missing" />;
   return <RemoteImage uri={uri} compact={compact} wide={wide} />;
 }
 
-function RemoteImage({ uri, compact = false, wide = false }: { uri: string; compact?: boolean; wide?: boolean }) {
+function RemoteImage({
+  uri,
+  compact = false,
+  wide = false,
+}: {
+  uri: string;
+  compact?: boolean;
+  wide?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <View style={[styles.frame, compact && styles.frameCompact, wide && styles.frameWide, styles.broken]}>
-        <Text style={styles.brokenText}>Failed</Text>
-      </View>
-    );
-  }
+
+  if (failed) return <Broken label="Failed" compact={compact} wide={wide} />;
+
   return (
-    <View style={[styles.frame, compact && styles.frameCompact, wide && styles.frameWide]}>
-      {loading ? <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.muted} /> : null}
+    <Frame compact={compact} wide={wide}>
+      {loading ? (
+        <YStack position="absolute" inset={0} items="center" justify="center">
+          <Spinner color="$color9" />
+        </YStack>
+      ) : null}
       <Image
         source={{ uri }}
-        style={styles.image}
-        resizeMode="cover"
+        width="100%"
+        height="100%"
+        objectFit="cover"
         onLoad={() => setLoading(false)}
         onError={() => {
           setLoading(false);
@@ -118,49 +146,21 @@ function RemoteImage({ uri, compact = false, wide = false }: { uri: string; comp
         }}
       />
       {wide ? (
-        <View style={styles.playButton}>
-          <View style={styles.playTriangle} />
-        </View>
+        <YStack
+          position="absolute"
+          t={10}
+          l="50%"
+          ml={-18}
+          width={36}
+          height={36}
+          rounded={999}
+          bg="$background08"
+          items="center"
+          justify="center"
+        >
+          <Play size={16} color="$color9" fill="currentColor" strokeWidth={1.5} />
+        </YStack>
       ) : null}
-    </View>
+    </Frame>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  frame: {
-    width: 160,
-    height: 110,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: colors.chip,
-  },
-  frameCompact: { width: 72, height: 48, borderRadius: 10 },
-  frameWide: { width: "100%", height: 123, borderRadius: 6 },
-  image: { width: "100%", height: "100%" },
-  playButton: {
-    position: "absolute",
-    top: 10,
-    left: "50%",
-    marginLeft: -18,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(252,252,252,0.78)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playTriangle: {
-    width: 0,
-    height: 0,
-    borderTopWidth: 7,
-    borderBottomWidth: 7,
-    borderLeftWidth: 11,
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    borderLeftColor: "#6E6E6E",
-    marginLeft: 3,
-  },
-  broken: { alignItems: "center", justifyContent: "center" },
-  brokenText: { ...type.meta, fontSize: 12, fontWeight: "600" },
-});
