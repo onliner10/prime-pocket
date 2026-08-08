@@ -5,6 +5,7 @@ import type { PairedHost } from "@prime-pocket/protocol";
 
 const KEY = "prime-pocket.paired-hosts";
 const SELECTED_WORKSPACE_KEY = "prime-pocket.selected-workspace";
+const SELECTED_WORKTREE_KEY = "prime-pocket.selected-worktree";
 
 async function getItem(key: string): Promise<string | null> {
   if (Platform.OS === "web") return AsyncStorage.getItem(key);
@@ -70,4 +71,29 @@ export async function saveSelectedWorkspaceId(hostId: string, workspaceId: strin
   }
   map[hostId] = workspaceId;
   await setItem(SELECTED_WORKSPACE_KEY, JSON.stringify(map));
+}
+
+export async function loadSelectedWorktreeId(hostId: string): Promise<string | null> {
+  const raw = await getItem(SELECTED_WORKTREE_KEY);
+  if (!raw) return null;
+  try {
+    const map = JSON.parse(raw) as Record<string, string>;
+    return map[hostId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSelectedWorktreeId(hostId: string, worktreeId: string): Promise<void> {
+  const raw = await getItem(SELECTED_WORKTREE_KEY);
+  let map: Record<string, string> = {};
+  if (raw) {
+    try {
+      map = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      map = {};
+    }
+  }
+  map[hostId] = worktreeId;
+  await setItem(SELECTED_WORKTREE_KEY, JSON.stringify(map));
 }

@@ -94,7 +94,11 @@ async function addMockRepo(page: import("@playwright/test").Page, fullName = "ac
   await page.getByLabel("Add a repository").click();
   await expect(page.getByText(/Mock GitHub/i)).toBeVisible({ timeout: 15000 });
   await page.getByLabel(`Add ${fullName}`).click();
+  await expect(page.getByText("New worktree").first()).toBeVisible({ timeout: 20000 });
+  await page.getByLabel("Branch name").fill("feat/demo");
+  await page.getByLabel("Create worktree").click();
   await expect(page.getByText(fullName).first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText(/feat\/demo/i).first()).toBeVisible({ timeout: 15000 });
 }
 
 test("proof screenshots: both image directions", async ({ page }) => {

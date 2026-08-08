@@ -10,11 +10,13 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AgentSummary, PairedHost, Workspace } from "@prime-pocket/protocol";
+import type { AgentSummary, PairedHost, Workspace, Worktree } from "@prime-pocket/protocol";
 import { listFleetAgents, listFleetWorkspaces, PocketHostClient } from "../src/api";
 import {
   loadPairedHosts,
+  loadSelectedWorktreeId,
   loadSelectedWorkspaceId,
+  saveSelectedWorktreeId,
   saveSelectedWorkspaceId,
 } from "../src/storage";
 import { countByFilter } from "../src/inbox";
@@ -33,7 +35,9 @@ export default function InboxScreen() {
   const bottomInset = insets.bottom + proofSafeArea.bottom;
   const [hosts, setHosts] = useState<PairedHost[]>([]);
   const [workspaces, setWorkspaces] = useState<FleetWorkspace[]>([]);
+  const [worktreesByWorkspace, setWorktreesByWorkspace] = useState<Record<string, Worktree[]>>({});
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -48,7 +52,9 @@ export default function InboxScreen() {
     if (paired.length === 0) {
       setAgents([]);
       setWorkspaces([]);
+      setWorktreesByWorkspace({});
       setSelectedWorkspaceId(null);
+      setSelectedWorktreeId(null);
       setLoading(false);
       return;
     }
@@ -58,10 +64,32 @@ export default function InboxScreen() {
     ]);
     setAgents(agentResult.agents);
     setWorkspaces(workspaceResult.workspaces);
+
     const host = paired[0]!;
-    const saved = await loadSelectedWorkspaceId(host.hostId);
-    const stillThere = workspaceResult.workspaces.some((w) => w.id === saved);
-    setSelectedWorkspaceId(stillThere ? saved : workspaceResult.workspaces[0]?.id ?? null);
+    const client = new PocketHostClient(host);
+    const treeMap: Record<string, Worktree[]> = {};
+    await Promise.all(
+      workspaceResult.workspaces.map(async (w) => {
+        try {
+          treeMap[w.id] = await client.listWorktrees(w.id);
+        } catch {
+          treeMap[w.id] = [];
+        }
+      }),
+    );
+    setWorktreesByWorkspace(treeMap);
+
+    const savedWs = await loadSelectedWorkspaceId(host.hostId);
+    const savedWt = await loadSelectedWorktreeId(host.hostId);
+    const wsStillThere = workspaceResult.workspaces.some((w) => w.id === savedWs);
+    const activeWsId = wsStillThere
+      ? savedWs
+      : workspaceResult.workspaces[0]?.id ?? null;
+    setSelectedWorkspaceId(activeWsId);
+    const trees = activeWsId ? treeMap[activeWsId] ?? [] : [];
+    const wtStillThere = trees.some((t) => t.id === savedWt);
+    setSelectedWorktreeId(wtStillThere ? savedWt : trees[0]?.id ?? null);
+
     const hostErrors = [...agentResult.errors, ...workspaceResult.errors];
     setConnectionError(
       hostErrors.length
@@ -78,6 +106,10 @@ export default function InboxScreen() {
   );
 
   const counts = countByFilter(agents);
+  const selectedWorktree =
+    selectedWorktreeId && selectedWorkspaceId
+      ? (worktreesByWorkspace[selectedWorkspaceId] ?? []).find((t) => t.id === selectedWorktreeId)
+      : undefined;
 
   function goAddRepository() {
     if (hosts.length === 0) {
@@ -87,9 +119,21 @@ export default function InboxScreen() {
     router.push("/repos/add");
   }
 
-  async function selectWorkspace(ws: FleetWorkspace) {
+  async function openWorkspace(ws: FleetWorkspace) {
     setSelectedWorkspaceId(ws.id);
     await saveSelectedWorkspaceId(ws.hostId, ws.id);
+    const trees = worktreesByWorkspace[ws.id] ?? [];
+    if (trees.length === 0) {
+      router.push({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: ws.id },
+      });
+      return;
+    }
+    router.push({
+      pathname: "/repos/[workspaceId]",
+      params: { workspaceId: ws.id },
+    });
   }
 
   async function submitComposer() {
@@ -103,21 +147,33 @@ export default function InboxScreen() {
       router.push("/repos/add");
       return;
     }
+    const workspace =
+      workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0]!;
+    const trees = worktreesByWorkspace[workspace.id] ?? [];
+    if (trees.length === 0) {
+      router.push({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: workspace.id },
+      });
+      return;
+    }
+    const worktree =
+      trees.find((t) => t.id === selectedWorktreeId) ?? trees[0]!;
     if (launching) return;
     setLaunching(true);
     try {
       const host = hosts[0]!;
-      const workspace =
-        workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0]!;
       const client = new PocketHostClient(host);
       const short = prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
       const agent = await client.launch({
         name: short,
         prompt,
+        worktreeId: worktree.id,
         workspaceId: workspace.id,
-        cwd: workspace.cwd,
+        cwd: worktree.cwd,
       });
       await saveSelectedWorkspaceId(host.hostId, workspace.id);
+      await saveSelectedWorktreeId(host.hostId, worktree.id);
       setDraft("");
       router.push({
         pathname: "/agent/[hostId]/[agentId]",
@@ -138,7 +194,7 @@ export default function InboxScreen() {
   const emptyBody =
     hosts.length === 0
       ? "Pair a desktop bridge, then add a repository."
-      : "Add a GitHub repository or local folder on the host.";
+      : "Add a GitHub repository, create a worktree, then send a task.";
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -222,6 +278,16 @@ export default function InboxScreen() {
           </Pressable>
         ) : null}
 
+        {selectedWorktree ? (
+          <View style={styles.activeTree} accessibilityLabel="Active worktree">
+            <Icon name="gitBranch" size={16} color={colors.ink2} strokeWidth={1.7} />
+            <Text style={styles.activeTreeText} numberOfLines={1}>
+              {workspaces.find((w) => w.id === selectedWorkspaceId)?.fullName ?? "Workspace"} ·{" "}
+              {selectedWorktree.branch}
+            </Text>
+          </View>
+        ) : null}
+
         <Text style={styles.sectionLabel}>Workspaces</Text>
 
         {loading && workspaces.length === 0 && hosts.length > 0 ? (
@@ -246,17 +312,25 @@ export default function InboxScreen() {
           </Pressable>
         ) : (
           <View style={styles.workspaces}>
-            {workspaces.map((w) => (
-              <WorkspaceRow
-                key={w.id}
-                name={w.fullName ?? w.name}
-                subtitle={w.defaultBranch ? `${w.defaultBranch} · ${w.cwd}` : w.cwd}
-                variant="plain"
-                icon={w.source === "github" ? "github" : "folder"}
-                selected={w.id === selectedWorkspaceId}
-                onPress={() => void selectWorkspace(w)}
-              />
-            ))}
+            {workspaces.map((w) => {
+              const trees = worktreesByWorkspace[w.id] ?? [];
+              const active =
+                trees.find((t) => t.id === selectedWorktreeId) ?? trees[0];
+              const subtitle = active
+                ? `${active.branch} · ${active.cwd}`
+                : "No worktree — tap to create one";
+              return (
+                <WorkspaceRow
+                  key={w.id}
+                  name={w.fullName ?? w.name}
+                  subtitle={subtitle}
+                  variant="plain"
+                  icon={w.source === "github" ? "github" : "folder"}
+                  selected={w.id === selectedWorkspaceId}
+                  onPress={() => void openWorkspace(w)}
+                />
+              );
+            })}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add another repository"
@@ -317,8 +391,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   inboxTitle: { ...type.display, marginTop: 22, marginBottom: 22 },
-  grid: { gap: space.gap, marginBottom: 30, marginHorizontal: -4 },
+  grid: { gap: space.gap, marginBottom: 22, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
+  activeTree: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EEF3F8",
+    borderRadius: radii.row,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  activeTreeText: { ...type.meta, color: colors.ink2, flex: 1, fontSize: 13 },
   sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
   connectionNotice: {
     flexDirection: "row",

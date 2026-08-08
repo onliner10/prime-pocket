@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { GitHubCatalogRepo, GitHubStatus, PairedHost } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../src/api";
 import { loadPairedHosts, saveSelectedWorkspaceId } from "../../src/storage";
+// After adding a repo, continue to create a worktree before launching agents.
 import { colors, fonts, proofSafeArea, radii, space, type } from "../../src/theme";
 import { CircleButton } from "../../src/components/CircleButton";
 import { Icon } from "../../src/components/Icon";
@@ -79,7 +80,10 @@ export default function AddRepositoryScreen() {
       const client = new PocketHostClient(host);
       const workspace = await client.addWorkspaceFromGitHub({ fullName: repo.fullName });
       await saveSelectedWorkspaceId(host.hostId, workspace.id);
-      router.replace("/");
+      router.replace({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: workspace.id },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -95,10 +99,13 @@ export default function AddRepositoryScreen() {
       const client = new PocketHostClient(host);
       const workspace = await client.addLocalWorkspace({
         name: localName.trim(),
-        cwd: localCwd.trim(),
+        repoRoot: localCwd.trim(),
       });
       await saveSelectedWorkspaceId(host.hostId, workspace.id);
-      router.replace("/");
+      router.replace({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: workspace.id },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,7 +132,8 @@ export default function AddRepositoryScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.lead}>
-              Pick a GitHub repo. The paired host opens a worktree and agents run there.
+              Pick a GitHub repo to create a workspace. Next you create a worktree for the agent to
+              work in.
             </Text>
 
             {status?.mock ? (

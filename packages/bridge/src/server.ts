@@ -14,6 +14,7 @@ import {
   type AgentEvent,
   type AgentId,
   type ApiErrorBody,
+  type CreateWorktreeRequest,
   type FollowUpRequest,
   type HostInfo,
   type LaunchAgentRequest,
@@ -26,9 +27,11 @@ import {
   type StreamClientMessage,
   type StreamServerMessage,
   type Workspace,
+  type Worktree,
 } from "@prime-pocket/protocol";
 import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AgentBackend } from "./backend/types.js";
 import { BridgeStore } from "./store.js";
 import { collectAdvertisedUrls, pickPreferredUrl } from "./network.js";
@@ -278,25 +281,26 @@ export class BridgeServer {
       if (req.method === "POST" && path === Routes.workspaces) {
         if (!this.requireAuth(req, res, url)) return;
         const body = JSON.parse((await readBody(req)) || "{}") as AddLocalWorkspaceRequest;
-        if (!body.name?.trim() || !body.cwd?.trim()) {
-          sendError(res, 400, "name and cwd required", "bad_request");
+        if (!body.name?.trim() || !body.repoRoot?.trim()) {
+          sendError(res, 400, "name and repoRoot required", "bad_request");
           return;
         }
-        const existing = this.store.findWorkspaceByCwd(body.cwd.trim());
+        const repoRoot = body.repoRoot.trim();
+        const existing = this.store.findWorkspaceByRepoRoot(repoRoot);
         if (existing) {
           sendJson(res, 200, { workspace: existing });
           return;
         }
+        mkdirSync(repoRoot, { recursive: true });
         const workspace: Workspace = {
           id: `ws_${randomBytes(8).toString("hex")}`,
           name: body.name.trim(),
-          cwd: body.cwd.trim(),
+          repoRoot,
           source: "local",
           addedAt: new Date().toISOString(),
         };
-        mkdirSync(workspace.cwd, { recursive: true });
         this.store.upsertWorkspace(workspace);
-        sendJson(res, 201, { workspace });
+        sendJson(res, 201, { workspace: this.store.getWorkspace(workspace.id) });
         return;
       }
 
@@ -319,13 +323,13 @@ export class BridgeServer {
           return;
         }
         const [owner, repoName] = repo.fullName.split("/");
-        const cwd = body.cwd?.trim() || this.store.worktreePathFor(repo.fullName);
-        mkdirSync(cwd, { recursive: true });
+        const repoRoot = body.repoRoot?.trim() || this.store.repoRootFor(repo.fullName);
+        mkdirSync(repoRoot, { recursive: true });
         const workspace: Workspace = {
           id: `ws_${randomBytes(8).toString("hex")}`,
           name: repoName || repo.fullName,
           fullName: repo.fullName,
-          cwd,
+          repoRoot,
           defaultBranch: repo.defaultBranch,
           source: "github",
           github: {
@@ -337,11 +341,105 @@ export class BridgeServer {
           addedAt: new Date().toISOString(),
         };
         this.store.upsertWorkspace(workspace);
-        sendJson(res, 201, { workspace });
+        // Repo only — caller creates a worktree next.
+        sendJson(res, 201, { workspace: this.store.getWorkspace(workspace.id) });
         return;
       }
 
+      const worktreesMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/worktrees(?:\/([^/]+))?$/);
+      if (worktreesMatch) {
+        if (!this.requireAuth(req, res, url)) return;
+        const workspaceId = decodeURIComponent(worktreesMatch[1]!);
+        const worktreeId = worktreesMatch[2] ? decodeURIComponent(worktreesMatch[2]) : undefined;
+        const workspace = this.store.getWorkspace(workspaceId);
+        if (!workspace) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+
+        if (req.method === "GET" && !worktreeId) {
+          sendJson(res, 200, { worktrees: this.store.listWorktrees(workspaceId) });
+          return;
+        }
+
+        if (req.method === "POST" && !worktreeId) {
+          const body = JSON.parse((await readBody(req)) || "{}") as CreateWorktreeRequest;
+          if (!body.branch?.trim()) {
+            sendError(res, 400, "branch required", "bad_request");
+            return;
+          }
+          const branch = body.branch.trim();
+          const name = (body.name?.trim() || branch).replace(/^\/+/, "");
+          const key = workspace.fullName || workspace.name;
+          const cwd = body.cwd?.trim() || this.store.worktreePathFor(key, branch);
+          const existing = this.store
+            .listWorktrees(workspaceId)
+            .find((t) => t.cwd === cwd || t.branch === branch);
+          if (existing) {
+            sendJson(res, 200, { worktree: existing });
+            return;
+          }
+          mkdirSync(cwd, { recursive: true });
+          // Demo/mock: write a tiny marker so the path looks like a real checkout.
+          try {
+            writeFileSync(
+              join(cwd, ".pocket-worktree.json"),
+              JSON.stringify(
+                {
+                  workspaceId,
+                  fullName: workspace.fullName,
+                  branch,
+                  mock: this.github.status().mock,
+                  createdAt: new Date().toISOString(),
+                },
+                null,
+                2,
+              ),
+            );
+          } catch {
+            // ignore marker failures
+          }
+          const worktree: Worktree = {
+            id: `wt_${randomBytes(8).toString("hex")}`,
+            workspaceId,
+            branch,
+            cwd,
+            name,
+            createdAt: new Date().toISOString(),
+          };
+          this.store.upsertWorktree(worktree);
+          sendJson(res, 201, { worktree });
+          return;
+        }
+
+        if (req.method === "DELETE" && worktreeId) {
+          const wt = this.store.getWorktree(worktreeId);
+          if (!wt || wt.workspaceId !== workspaceId) {
+            sendError(res, 404, "Worktree not found", "not_found");
+            return;
+          }
+          this.store.removeWorktree(worktreeId);
+          sendJson(res, 200, { ok: true });
+          return;
+        }
+      }
+
       const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)$/);
+      if (workspaceMatch && req.method === "GET") {
+        if (!this.requireAuth(req, res, url)) return;
+        const id = decodeURIComponent(workspaceMatch[1]!);
+        const workspace = this.store.getWorkspace(id);
+        if (!workspace) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+        sendJson(res, 200, {
+          workspace,
+          worktrees: this.store.listWorktrees(id),
+        });
+        return;
+      }
+
       if (workspaceMatch && req.method === "DELETE") {
         if (!this.requireAuth(req, res, url)) return;
         const id = decodeURIComponent(workspaceMatch[1]!);
@@ -395,13 +493,30 @@ export class BridgeServer {
         if (!this.requireAuth(req, res, url)) return;
         const body = JSON.parse((await readBody(req)) || "{}") as LaunchAgentRequest;
         let launchReq = body;
-        if (body.workspaceId) {
+        if (body.worktreeId) {
+          const wt = this.store.getWorktree(body.worktreeId);
+          if (!wt) {
+            sendError(res, 404, "Worktree not found", "not_found");
+            return;
+          }
+          launchReq = { ...body, cwd: body.cwd ?? wt.cwd, workspaceId: wt.workspaceId };
+        } else if (body.workspaceId) {
           const ws = this.store.getWorkspace(body.workspaceId);
           if (!ws) {
             sendError(res, 404, "Workspace not found", "not_found");
             return;
           }
-          launchReq = { ...body, cwd: body.cwd ?? ws.cwd };
+          const latest = this.store.listWorktrees(ws.id)[0];
+          if (!latest) {
+            sendError(
+              res,
+              400,
+              "Create a worktree in this workspace before launching an agent",
+              "worktree_required",
+            );
+            return;
+          }
+          launchReq = { ...body, cwd: body.cwd ?? latest.cwd, worktreeId: latest.id };
         }
         const agent = await this.backend.launch(launchReq);
         sendJson(res, 201, { agent });

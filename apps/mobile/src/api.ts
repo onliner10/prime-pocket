@@ -4,6 +4,7 @@ import {
   type AddWorkspaceFromGitHubRequest,
   type AgentSnapshot,
   type AgentSummary,
+  type CreateWorktreeRequest,
   type FollowUpRequest,
   type GitHubCatalogRepo,
   type GitHubStatus,
@@ -17,6 +18,7 @@ import {
   type SteerRequest,
   type StreamServerMessage,
   type Workspace,
+  type Worktree,
 } from "@prime-pocket/protocol";
 
 export class PocketApiError extends Error {
@@ -137,6 +139,31 @@ export class PocketHostClient {
       headers: authHeaders(this.host.token),
     });
     await parseJson(res);
+  }
+
+  async getWorkspace(id: string): Promise<{ workspace: Workspace; worktrees: Worktree[] }> {
+    const res = await fetch(this.url(Routes.workspace(id)), {
+      headers: authHeaders(this.host.token),
+    });
+    return parseJson(res);
+  }
+
+  async listWorktrees(workspaceId: string): Promise<Worktree[]> {
+    const res = await fetch(this.url(Routes.workspaceWorktrees(workspaceId)), {
+      headers: authHeaders(this.host.token),
+    });
+    const data = await parseJson<{ worktrees: Worktree[] }>(res);
+    return data.worktrees;
+  }
+
+  async createWorktree(workspaceId: string, req: CreateWorktreeRequest): Promise<Worktree> {
+    const res = await fetch(this.url(Routes.workspaceWorktrees(workspaceId)), {
+      method: "POST",
+      headers: authHeaders(this.host.token),
+      body: JSON.stringify(req),
+    });
+    const data = await parseJson<{ worktree: Worktree }>(res);
+    return data.worktree;
   }
 
   async githubStatus(): Promise<GitHubStatus> {

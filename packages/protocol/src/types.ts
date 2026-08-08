@@ -151,7 +151,9 @@ export interface PairResponse {
 
 export interface LaunchAgentRequest {
   cwd?: string;
-  /** Preferred over bare cwd when the host manages workspaces. */
+  /** Launch into a concrete worktree (preferred). */
+  worktreeId?: WorktreeId;
+  /** Falls back to the newest worktree on this workspace when worktreeId is omitted. */
   workspaceId?: WorkspaceId;
   name?: string;
   prompt?: string;
@@ -160,12 +162,15 @@ export interface LaunchAgentRequest {
   resumeId?: string;
 }
 
-/** Opaque workspace id (a repo/worktree registered on the bridge). */
+/** Opaque workspace id — a linked repository on the bridge. */
 export type WorkspaceId = string;
 
+/** Opaque worktree id — a branch checkout under a workspace. */
+export type WorktreeId = string;
+
 /**
- * A repository / worktree the paired host can run agents in.
- * Distinct from PairedHost: one host owns many workspaces.
+ * A repository registered on the paired host.
+ * Agents do not run here directly — they run in a Worktree.
  */
 export interface Workspace {
   id: WorkspaceId;
@@ -173,8 +178,8 @@ export interface Workspace {
   name: string;
   /** owner/repo when known. */
   fullName?: string;
-  /** Absolute path on the host machine. */
-  cwd: string;
+  /** Optional bare/clone root on the host. */
+  repoRoot?: string;
   defaultBranch?: string;
   source: "github" | "local";
   github?: {
@@ -184,6 +189,21 @@ export interface Workspace {
     htmlUrl?: string;
   };
   addedAt: string;
+  /** Convenience count for list UIs. */
+  worktreeCount?: number;
+}
+
+/** A git worktree (branch + cwd) where an agent can do work. */
+export interface Worktree {
+  id: WorktreeId;
+  workspaceId: WorkspaceId;
+  /** Branch checked out in this worktree. */
+  branch: string;
+  /** Absolute path on the host machine. */
+  cwd: string;
+  /** Short label (often the branch). */
+  name: string;
+  createdAt: string;
 }
 
 export interface GitHubStatus {
@@ -208,13 +228,21 @@ export interface GitHubCatalogRepo {
 
 export interface AddWorkspaceFromGitHubRequest {
   fullName: string;
-  /** Optional override; host may invent a worktree path under its data dir. */
-  cwd?: string;
+  /** Optional override for the host-side repo root. */
+  repoRoot?: string;
 }
 
 export interface AddLocalWorkspaceRequest {
   name: string;
-  cwd: string;
+  /** Local folder that is the repository root on the host. */
+  repoRoot: string;
+}
+
+export interface CreateWorktreeRequest {
+  branch: string;
+  name?: string;
+  /** Optional override; host invents a path under its worktrees dir by default. */
+  cwd?: string;
 }
 
 export interface PromptImage {

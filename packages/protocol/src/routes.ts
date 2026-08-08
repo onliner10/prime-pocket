@@ -8,6 +8,10 @@ export const Routes = {
   workspaces: `${API_PREFIX}/workspaces`,
   workspace: (id: string) => `${API_PREFIX}/workspaces/${encodeURIComponent(id)}`,
   workspacesFromGitHub: `${API_PREFIX}/workspaces/from-github`,
+  workspaceWorktrees: (id: string) =>
+    `${API_PREFIX}/workspaces/${encodeURIComponent(id)}/worktrees`,
+  worktree: (workspaceId: string, worktreeId: string) =>
+    `${API_PREFIX}/workspaces/${encodeURIComponent(workspaceId)}/worktrees/${encodeURIComponent(worktreeId)}`,
   githubStatus: `${API_PREFIX}/github/status`,
   githubRepos: `${API_PREFIX}/github/repos`,
   githubConnect: `${API_PREFIX}/github/connect`,

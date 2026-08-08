@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import selfsigned from "selfsigned";
-import type { Workspace } from "@prime-pocket/protocol";
+import type { Workspace, Worktree } from "@prime-pocket/protocol";
 
 export interface BridgeIdentity {
   hostId: string;
@@ -19,6 +19,9 @@ export interface StoredToken {
   createdAt: string;
 }
 
+/** Legacy shape when workspace still carried a cwd. */
+type LegacyWorkspace = Workspace & { cwd?: string };
+
 export interface BridgeStoreData {
   identity: BridgeIdentity;
   tokens: StoredToken[];
@@ -26,8 +29,10 @@ export interface BridgeStoreData {
   pairCodeExpiresAt: string;
   ntfyTopic?: string;
   ntfyServer?: string;
-  /** Repositories / worktrees registered on this host. */
+  /** Linked repositories on this host. */
   workspaces: Workspace[];
+  /** Branch checkouts where agents run. */
+  worktrees: Worktree[];
 }
 
 function defaultDataDir(): string {
@@ -37,6 +42,7 @@ function defaultDataDir(): string {
 export function ensureDataDir(dir = defaultDataDir()): string {
   mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "artifacts"), { recursive: true });
+  mkdirSync(join(dir, "repos"), { recursive: true });
   mkdirSync(join(dir, "worktrees"), { recursive: true });
   return dir;
 }
@@ -73,6 +79,10 @@ function createIdentity(hostName: string): BridgeIdentity {
   };
 }
 
+function safeSlug(input: string): string {
+  return input.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 export class BridgeStore {
   readonly dataDir: string;
   data: BridgeStoreData;
@@ -81,8 +91,15 @@ export class BridgeStore {
     this.dataDir = ensureDataDir(dataDir);
     const path = storePath(this.dataDir);
     if (existsSync(path)) {
-      const loaded = JSON.parse(readFileSync(path, "utf8")) as BridgeStoreData;
-      this.data = { ...loaded, workspaces: loaded.workspaces ?? [] };
+      const loaded = JSON.parse(readFileSync(path, "utf8")) as BridgeStoreData & {
+        workspaces?: LegacyWorkspace[];
+      };
+      this.data = {
+        ...loaded,
+        workspaces: [],
+        worktrees: loaded.worktrees ?? [],
+      };
+      this.migrateLegacyWorkspaces(loaded.workspaces ?? []);
     } else {
       this.data = {
         identity: createIdentity(hostName),
@@ -90,9 +107,33 @@ export class BridgeStore {
         pairCode: randomBytes(4).toString("hex"),
         pairCodeExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
         workspaces: [],
+        worktrees: [],
       };
       this.save();
     }
+  }
+
+  /** Older builds stored cwd on the workspace; split into worktree rows. */
+  private migrateLegacyWorkspaces(raw: LegacyWorkspace[]): void {
+    for (const row of raw) {
+      const { cwd, ...rest } = row;
+      const workspace: Workspace = {
+        ...rest,
+        repoRoot: rest.repoRoot ?? cwd,
+      };
+      this.data.workspaces.push(workspace);
+      if (cwd && !this.data.worktrees.some((t) => t.cwd === cwd)) {
+        this.data.worktrees.push({
+          id: `wt_${randomBytes(8).toString("hex")}`,
+          workspaceId: workspace.id,
+          branch: workspace.defaultBranch ?? "main",
+          cwd,
+          name: workspace.defaultBranch ?? "main",
+          createdAt: workspace.addedAt,
+        });
+      }
+    }
+    this.save();
   }
 
   save(): void {
@@ -169,15 +210,22 @@ export class BridgeStore {
   }
 
   listWorkspaces(): Workspace[] {
-    return [...(this.data.workspaces ?? [])].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+    return [...(this.data.workspaces ?? [])]
+      .map((w) => ({
+        ...w,
+        worktreeCount: this.listWorktrees(w.id).length,
+      }))
+      .sort((a, b) => b.addedAt.localeCompare(a.addedAt));
   }
 
   getWorkspace(id: string): Workspace | undefined {
-    return (this.data.workspaces ?? []).find((w) => w.id === id);
+    const w = (this.data.workspaces ?? []).find((x) => x.id === id);
+    if (!w) return undefined;
+    return { ...w, worktreeCount: this.listWorktrees(id).length };
   }
 
-  findWorkspaceByCwd(cwd: string): Workspace | undefined {
-    return (this.data.workspaces ?? []).find((w) => w.cwd === cwd);
+  findWorkspaceByRepoRoot(repoRoot: string): Workspace | undefined {
+    return (this.data.workspaces ?? []).find((w) => w.repoRoot === repoRoot);
   }
 
   findWorkspaceByFullName(fullName: string): Workspace | undefined {
@@ -187,24 +235,58 @@ export class BridgeStore {
 
   upsertWorkspace(workspace: Workspace): Workspace {
     const list = this.data.workspaces ?? [];
-    const idx = list.findIndex((w) => w.id === workspace.id);
-    if (idx >= 0) list[idx] = workspace;
-    else list.push(workspace);
+    const { worktreeCount: _count, ...row } = workspace;
+    void _count;
+    const idx = list.findIndex((w) => w.id === row.id);
+    if (idx >= 0) list[idx] = row;
+    else list.push(row);
     this.data.workspaces = list;
     this.save();
-    return workspace;
+    return this.getWorkspace(row.id)!;
   }
 
   removeWorkspace(id: string): boolean {
     const before = (this.data.workspaces ?? []).length;
     this.data.workspaces = (this.data.workspaces ?? []).filter((w) => w.id !== id);
+    this.data.worktrees = (this.data.worktrees ?? []).filter((t) => t.workspaceId !== id);
     this.save();
     return this.data.workspaces.length < before;
   }
 
-  /** Local path under dataDir/worktrees for a GitHub full name. */
-  worktreePathFor(fullName: string): string {
-    const safe = fullName.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
-    return join(this.dataDir, "worktrees", safe);
+  listWorktrees(workspaceId?: string): Worktree[] {
+    const all = this.data.worktrees ?? [];
+    const filtered = workspaceId ? all.filter((t) => t.workspaceId === workspaceId) : all;
+    return [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getWorktree(id: string): Worktree | undefined {
+    return (this.data.worktrees ?? []).find((t) => t.id === id);
+  }
+
+  upsertWorktree(worktree: Worktree): Worktree {
+    const list = this.data.worktrees ?? [];
+    const idx = list.findIndex((t) => t.id === worktree.id);
+    if (idx >= 0) list[idx] = worktree;
+    else list.push(worktree);
+    this.data.worktrees = list;
+    this.save();
+    return worktree;
+  }
+
+  removeWorktree(id: string): boolean {
+    const before = (this.data.worktrees ?? []).length;
+    this.data.worktrees = (this.data.worktrees ?? []).filter((t) => t.id !== id);
+    this.save();
+    return this.data.worktrees.length < before;
+  }
+
+  /** Host-side clone/root path for a repo full name. */
+  repoRootFor(fullName: string): string {
+    return join(this.dataDir, "repos", safeSlug(fullName));
+  }
+
+  /** Host-side worktree path for repo + branch. */
+  worktreePathFor(fullName: string, branch: string): string {
+    return join(this.dataDir, "worktrees", safeSlug(fullName), safeSlug(branch));
   }
 }

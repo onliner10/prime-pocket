@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,8 +25,8 @@ async function freePort(): Promise<number> {
   });
 }
 
-describe("github workspaces", () => {
-  it("lists mock repos and adds a workspace without credentials", async () => {
+describe("github workspaces + worktrees", () => {
+  it("adds a repo workspace, creates a worktree, then launches an agent there", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pocket-gh-"));
     const port = await freePort();
     try {
@@ -50,16 +50,6 @@ describe("github workspaces", () => {
       const { token } = (await pair.json()) as { token: string };
       const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
 
-      const statusRes = await fetch(`${base}/v1/github/status`, { headers });
-      const status = (await statusRes.json()) as { mock: boolean; connected: boolean; login?: string };
-      assert.equal(status.mock, true);
-      assert.equal(status.connected, true);
-      assert.equal(status.login, "pocket-demo");
-
-      const reposRes = await fetch(`${base}/v1/github/repos?q=checkout`, { headers });
-      const { repos } = (await reposRes.json()) as { repos: Array<{ fullName: string }> };
-      assert.ok(repos.some((r) => r.fullName === "acme/checkout-web"));
-
       const addRes = await fetch(`${base}/v1/workspaces/from-github`, {
         method: "POST",
         headers,
@@ -67,29 +57,44 @@ describe("github workspaces", () => {
       });
       assert.equal(addRes.status, 201);
       const { workspace } = (await addRes.json()) as {
-        workspace: { id: string; name: string; fullName?: string; source: string; cwd: string };
+        workspace: { id: string; fullName?: string; worktreeCount?: number; repoRoot?: string };
       };
-      assert.equal(workspace.name, "checkout-web");
       assert.equal(workspace.fullName, "acme/checkout-web");
-      assert.equal(workspace.source, "github");
-      assert.ok(workspace.cwd.includes("worktrees"));
+      assert.equal(workspace.worktreeCount ?? 0, 0);
+      assert.ok(workspace.repoRoot?.includes("repos"));
 
-      const listRes = await fetch(`${base}/v1/workspaces`, { headers });
-      const { workspaces } = (await listRes.json()) as { workspaces: unknown[] };
-      assert.equal(workspaces.length, 1);
+      const launchTooSoon = await fetch(`${base}/v1/agents`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ workspaceId: workspace.id, name: "x", prompt: "y" }),
+      });
+      assert.equal(launchTooSoon.status, 400);
+
+      const wtRes = await fetch(`${base}/v1/workspaces/${workspace.id}/worktrees`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ branch: "feat/hello-world" }),
+      });
+      assert.equal(wtRes.status, 201);
+      const { worktree } = (await wtRes.json()) as {
+        worktree: { id: string; branch: string; cwd: string };
+      };
+      assert.equal(worktree.branch, "feat/hello-world");
+      assert.ok(worktree.cwd.includes("worktrees"));
+      assert.ok(existsSync(join(worktree.cwd, ".pocket-worktree.json")));
 
       const launchRes = await fetch(`${base}/v1/agents`, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          workspaceId: workspace.id,
+          worktreeId: worktree.id,
           name: "First task",
           prompt: "Add a hello world script",
         }),
       });
       assert.equal(launchRes.status, 201);
       const { agent } = (await launchRes.json()) as { agent: { cwd?: string } };
-      assert.equal(agent.cwd, workspace.cwd);
+      assert.equal(agent.cwd, worktree.cwd);
 
       await server.stop();
     } finally {

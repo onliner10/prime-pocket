@@ -22,7 +22,8 @@ Pocket connects directly to the user's own infrastructure: the phone reaches a u
 
 - A Pocket Bridge runs on the user's desktop or other machine and advertises reachable LAN/Tailscale URLs through a pairing QR/deep link.
 - The user pairs from the mobile app by scanning or pasting the deep link, or by entering a bridge URL and pair code manually.
-- **One paired host can work in many repositories/worktrees.** Inbox "Workspaces" are those repos, not the host itself. Hosts are managed separately under profile.
+- **One paired host can work in many repositories.** Inbox "Workspaces" are linked repos, not the host itself. Hosts are managed separately under profile.
+- Flow: add a repository (workspace) → create a **worktree** (branch checkout on the host) → launch an agent into that worktree `cwd`.
 - Repositories are added from a GitHub catalog on the bridge (or a local folder path on the host). Demo mode uses a **mock GitHub** catalog so pairing, screenshots, and e2e need no credentials.
 - Paired hosts are used across changing networks; the app can retry advertised URLs and reconnect when LAN/Tailscale reachability changes.
 - The user can monitor multiple hosts and their agents from one phone, open a live transcript, and send work or decisions from the agent thread.
