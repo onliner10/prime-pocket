@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { X } from "@tamagui/lucide-icons-2";
+import { Paragraph, YStack } from "tamagui";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
 import { upsertPairedHost } from "../src/storage";
-import { colors, radii, type } from "../src/theme";
-import { CircleButton } from "../src/components/CircleButton";
-import { Icon } from "../src/components/Icon";
+import { IconButton, PrimaryButton, Screen } from "../src/ui";
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -16,37 +15,6 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-
-  if (Platform.OS === "web") {
-    return (
-      <SafeAreaView style={styles.root}>
-        <View style={styles.topBar}>
-          <CircleButton accessibilityLabel="Close" onPress={() => router.back()}>
-            <Icon name="close" size={16} color={colors.ink} strokeWidth={2.1} />
-          </CircleButton>
-        </View>
-        <Text style={styles.text}>Camera QR scan is unavailable on web. Use Pair host → paste.</Text>
-        <Pressable style={styles.btn} onPress={() => router.replace("/pair")}>
-          <Text style={styles.btnText}>Open pair</Text>
-        </Pressable>
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission) {
-    return <View style={styles.root} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.root}>
-        <Text style={styles.text}>Camera permission is required to scan the bridge QR.</Text>
-        <Pressable style={styles.btn} onPress={() => void requestPermission()}>
-          <Text style={styles.btnText}>Grant permission</Text>
-        </Pressable>
-      </SafeAreaView>
-    );
-  }
 
   async function onCode(data: string) {
     if (busy || done) return;
@@ -80,8 +48,63 @@ export default function ScanScreen() {
     }
   }
 
+  if (Platform.OS === "web") {
+    return (
+      <Screen justify="center" px={28}>
+        <YStack position="absolute" t={16} l={16} z={2}>
+          <IconButton
+            aria-label="Close"
+            icon={<X size={16} strokeWidth={2.1} />}
+            onPress={() => router.back()}
+          />
+        </YStack>
+        <Paragraph fontSize="$5" color="$color" text="center">
+          Camera QR scan is unavailable on web. Use Pair host → paste.
+        </Paragraph>
+        <PrimaryButton
+          pill
+          self="center"
+          mt={18}
+          px={20}
+          height={46}
+          role="button"
+          aria-label="Open pair"
+          onPress={() => router.replace("/pair")}
+        >
+          Open pair
+        </PrimaryButton>
+      </Screen>
+    );
+  }
+
+  if (!permission) {
+    return <Screen />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <Screen justify="center" px={28}>
+        <Paragraph fontSize="$5" color="$color" text="center">
+          Camera permission is required to scan the bridge QR.
+        </Paragraph>
+        <PrimaryButton
+          pill
+          self="center"
+          mt={18}
+          px={20}
+          height={46}
+          role="button"
+          aria-label="Grant camera permission"
+          onPress={() => void requestPermission()}
+        >
+          Grant permission
+        </PrimaryButton>
+      </Screen>
+    );
+  }
+
   return (
-    <View style={styles.root}>
+    <YStack flex={1} position="relative" bg="$background" justify="center">
       <CameraView
         style={StyleSheet.absoluteFill}
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
@@ -89,37 +112,32 @@ export default function ScanScreen() {
           void onCode(result.data);
         }}
       />
-      <View style={styles.overlay}>
-        <Text style={styles.textLight}>Point at the bridge QR</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {busy ? <Text style={styles.textLight}>Pairing…</Text> : null}
-      </View>
-    </View>
+      <YStack
+        position="absolute"
+        b={40}
+        l={20}
+        r={20}
+        p={16}
+        rounded="$7"
+        bg="$shadow8"
+        gap={8}
+        enterStyle={{ opacity: 0, y: 12 }}
+        transition="medium"
+      >
+        <Paragraph fontSize="$5" color="#fff" text="center">
+          Point at the bridge QR
+        </Paragraph>
+        {error ? (
+          <Paragraph fontSize="$5" color="#FF8A80" text="center">
+            {error}
+          </Paragraph>
+        ) : null}
+        {busy ? (
+          <Paragraph fontSize="$5" color="#fff" text="center">
+            Pairing…
+          </Paragraph>
+        ) : null}
+      </YStack>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, justifyContent: "center" },
-  topBar: { position: "absolute", top: 16, left: 16, zIndex: 2 },
-  overlay: {
-    position: "absolute",
-    bottom: 40,
-    left: 20,
-    right: 20,
-    padding: 16,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    borderRadius: 16,
-  },
-  text: { ...type.body, textAlign: "center", paddingHorizontal: 28 },
-  textLight: { ...type.body, color: "#fff", textAlign: "center" },
-  error: { ...type.body, color: "#FF8A80", textAlign: "center", marginTop: 8 },
-  btn: {
-    marginTop: 18,
-    alignSelf: "center",
-    backgroundColor: colors.ink,
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    borderRadius: radii.pill,
-  },
-  btnText: { ...type.pill, fontSize: 15, color: "#fff" },
-});

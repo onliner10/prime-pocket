@@ -1,6 +1,6 @@
 import { ScrollViewStyleReset } from "expo-router/html";
 import type { PropsWithChildren } from "react";
-import { WEB_FONT_CSS, WEB_FONT_STYLE_ID } from "../src/webFonts";
+import { WEB_SHELL_CSS, WEB_SHELL_STYLE_ID } from "../src/webShell";
 
 /**
  * Custom HTML shell so mobile web uses a real phone viewport (Cursor-like
@@ -18,7 +18,7 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
         />
         <ScrollViewStyleReset />
-        <style id={WEB_FONT_STYLE_ID}>{WEB_FONT_CSS}</style>
+        <style id={WEB_SHELL_STYLE_ID}>{WEB_SHELL_CSS}</style>
       </head>
       <body>{children}</body>
     </html>
