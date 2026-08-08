@@ -47,6 +47,8 @@
     "@babel/core": "^7.26.0",
     "@playwright/test": "^1.62.1",
     "@tamagui/babel-plugin": "^2.7.3",
+    "@tamagui/metro-plugin": "2.7.3",
+    "@tamagui/static": "2.7.3",
     "@types/react": "~19.1.17",
     "typescript": "^5.7.2"
   }

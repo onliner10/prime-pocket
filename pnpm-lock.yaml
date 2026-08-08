@@ -114,6 +114,12 @@ importers:
       '@tamagui/babel-plugin':
         specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tamagui/metro-plugin':
+        specifier: 2.7.3
+        version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tamagui/static':
+        specifier: 2.7.3
+        version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@types/react':
         specifier: ~19.1.17
         version: 19.1.17
@@ -1907,6 +1913,9 @@ packages:
     resolution: {integrity: sha512-wNPWL0cPaHeNp31XuvC43u74o8Zvxi878yKn6Z5nj18aKNWmpojSE3xkEu2DZlGZU4whOGYvuRw1DydHHJEnWg==}
     peerDependencies:
       react: '>=19'
+
+  '@tamagui/metro-plugin@2.7.3':
+    resolution: {integrity: sha512-FwEa3LlHJ/A+kqac+uFNTfN5GSQgtLx32BUJXTW538UlkPf3HRnB4m7N5qyLUE7PEvwEvCWYaWPF7f4kMWsuoA==}
 
   '@tamagui/native@2.7.3':
     resolution: {integrity: sha512-Oko9WeqqmyDzbx6XgfXwtFJHYqzWF3eExcfPMZGDXhQ3xU2tTvZyrZDZJtMrMlFQTWQLCnksorRb6ge+SurY4A==}
@@ -6948,6 +6957,15 @@ snapshots:
     transitivePeerDependencies:
       - react-dom
       - react-native
+
+  '@tamagui/metro-plugin@2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@tamagui/static': 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+    transitivePeerDependencies:
+      - encoding
+      - react
+      - react-dom
+      - supports-color
 
   '@tamagui/native@2.7.3(react@19.1.0)':
     dependencies:

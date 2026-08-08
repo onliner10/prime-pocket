@@ -1,6 +1,7 @@
 // Expo auto-configures monorepo watchFolders / nodeModulesPaths for SDK 52+.
 // Keep this file minimal so Expo defaults stay intact.
 const { getDefaultConfig } = require("expo/metro-config");
+const { withTamagui } = require("@tamagui/metro-plugin");
 
 // Tamagui ships its atomic styles as CSS on web.
 const config = getDefaultConfig(__dirname, { isCSSEnabled: true });
@@ -11,4 +12,5 @@ const config = getDefaultConfig(__dirname, { isCSSEnabled: true });
 // silently ship the web build to native.
 config.resolver.unstable_enablePackageExports = true;
 
-module.exports = config;
+// Resolves .css and validates the compiler options; reads tamagui.build.ts.
+module.exports = withTamagui(config);

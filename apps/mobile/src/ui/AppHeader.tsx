@@ -37,10 +37,7 @@ export const HeaderSpacer = styled(YStack, {
   width: 40,
 });
 
-/**
- * The circular chrome button used across every top bar. Replaces the old
- * hand-rolled CircleButton; Tamagui gives press/hover/focus states for free.
- */
+/** The circular chrome button used across every top bar. */
 export const IconButton = styled(Button, {
   name: "IconButton",
   circular: true,
