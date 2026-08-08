@@ -35,19 +35,10 @@ importers:
       '@react-navigation/native':
         specifier: ^7.0.14
         version: 7.3.15(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
-      '@tamagui/animations-css':
-        specifier: ^2.7.3
-        version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@tamagui/animations-react-native':
-        specifier: ^2.7.3
-        version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tamagui/config':
         specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react-native-reanimated@4.5.3(react-native-worklets@0.11.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react@19.1.0)
       '@tamagui/lucide-icons-2':
-        specifier: ^2.7.3
-        version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@tamagui/portal':
         specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tamagui/toast':
@@ -115,10 +106,10 @@ importers:
         specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tamagui/metro-plugin':
-        specifier: 2.7.3
+        specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tamagui/static':
-        specifier: 2.7.3
+        specifier: ^2.7.3
         version: 2.7.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@types/react':
         specifier: ~19.1.17

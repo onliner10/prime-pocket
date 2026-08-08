@@ -19,11 +19,8 @@
     "@prime-pocket/protocol": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.0.14",
-    "@tamagui/animations-css": "^2.7.3",
-    "@tamagui/animations-react-native": "^2.7.3",
     "@tamagui/config": "^2.7.3",
     "@tamagui/lucide-icons-2": "^2.7.3",
-    "@tamagui/portal": "^2.7.3",
     "@tamagui/toast": "^2.7.3",
     "expo": "~54.0.36",
     "expo-build-properties": "~1.0.10",
@@ -47,8 +44,8 @@
     "@babel/core": "^7.26.0",
     "@playwright/test": "^1.62.1",
     "@tamagui/babel-plugin": "^2.7.3",
-    "@tamagui/metro-plugin": "2.7.3",
-    "@tamagui/static": "2.7.3",
+    "@tamagui/metro-plugin": "^2.7.3",
+    "@tamagui/static": "^2.7.3",
     "@types/react": "~19.1.17",
     "typescript": "^5.7.2"
   }
