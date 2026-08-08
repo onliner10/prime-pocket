@@ -39,11 +39,20 @@ async function clearApp(page: import("@playwright/test").Page) {
 }
 
 async function pairViaUi(page: import("@playwright/test").Page, pairCode: string) {
-  await page.getByLabel("Pair host").first().click();
+  await page.getByLabel("Hosts").first().click();
+  await page.getByLabel("Pair host").click();
   await page.getByPlaceholder("http://127.0.0.1:17420").fill(BRIDGE);
   await page.getByPlaceholder("pair code").fill(pairCode);
   await page.getByText("Pair manually", { exact: true }).click();
-  await expect(page.getByText("ui-test").first()).toBeVisible({ timeout: 20000 });
+  await page.goto(EXPO, { waitUntil: "networkidle" });
+  await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 20000 });
+}
+
+async function addMockRepo(page: import("@playwright/test").Page, fullName = "acme/checkout-web") {
+  await page.getByLabel("Add a repository").click();
+  await expect(page.getByText(/Mock GitHub/i)).toBeVisible({ timeout: 15000 });
+  await page.getByLabel(`Add ${fullName}`).click();
+  await expect(page.getByText(fullName).first()).toBeVisible({ timeout: 20000 });
 }
 
 test.describe("Prime Pocket mobile screenshots", () => {
@@ -56,6 +65,7 @@ test.describe("Prime Pocket mobile screenshots", () => {
     await shot(page, "01-inbox-empty.png");
 
     await pairViaUi(page, currentPairCode());
+    await addMockRepo(page);
     await page.waitForTimeout(600);
     await shot(page, "02-inbox-paired.png");
 

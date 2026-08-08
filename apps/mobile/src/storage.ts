@@ -4,6 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import type { PairedHost } from "@prime-pocket/protocol";
 
 const KEY = "prime-pocket.paired-hosts";
+const SELECTED_WORKSPACE_KEY = "prime-pocket.selected-workspace";
 
 async function getItem(key: string): Promise<string | null> {
   if (Platform.OS === "web") return AsyncStorage.getItem(key);
@@ -43,4 +44,30 @@ export async function removePairedHost(hostId: string): Promise<PairedHost[]> {
   const hosts = (await loadPairedHosts()).filter((h) => h.hostId !== hostId);
   await savePairedHosts(hosts);
   return hosts;
+}
+
+/** Last workspace the user launched into / selected on a host. */
+export async function loadSelectedWorkspaceId(hostId: string): Promise<string | null> {
+  const raw = await getItem(SELECTED_WORKSPACE_KEY);
+  if (!raw) return null;
+  try {
+    const map = JSON.parse(raw) as Record<string, string>;
+    return map[hostId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSelectedWorkspaceId(hostId: string, workspaceId: string): Promise<void> {
+  const raw = await getItem(SELECTED_WORKSPACE_KEY);
+  let map: Record<string, string> = {};
+  if (raw) {
+    try {
+      map = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      map = {};
+    }
+  }
+  map[hostId] = workspaceId;
+  await setItem(SELECTED_WORKSPACE_KEY, JSON.stringify(map));
 }

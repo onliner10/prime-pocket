@@ -10,9 +10,13 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
-import { listFleetAgents, PocketHostClient } from "../src/api";
-import { loadPairedHosts } from "../src/storage";
+import type { AgentSummary, PairedHost, Workspace } from "@prime-pocket/protocol";
+import { listFleetAgents, listFleetWorkspaces, PocketHostClient } from "../src/api";
+import {
+  loadPairedHosts,
+  loadSelectedWorkspaceId,
+  saveSelectedWorkspaceId,
+} from "../src/storage";
 import { countByFilter } from "../src/inbox";
 import { colors, proofSafeArea, radii, shadows, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
@@ -21,11 +25,15 @@ import { StatusCard } from "../src/components/StatusCard";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
 import { PillComposer } from "../src/components/PillComposer";
 
+type FleetWorkspace = Workspace & { hostId: string };
+
 export default function InboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom + proofSafeArea.bottom;
   const [hosts, setHosts] = useState<PairedHost[]>([]);
+  const [workspaces, setWorkspaces] = useState<FleetWorkspace[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -39,12 +47,27 @@ export default function InboxScreen() {
     setHosts(paired);
     if (paired.length === 0) {
       setAgents([]);
+      setWorkspaces([]);
+      setSelectedWorkspaceId(null);
       setLoading(false);
       return;
     }
-    const result = await listFleetAgents(paired);
-    setAgents(result.agents);
-    setConnectionError(result.errors.length ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable` : null);
+    const [agentResult, workspaceResult] = await Promise.all([
+      listFleetAgents(paired),
+      listFleetWorkspaces(paired),
+    ]);
+    setAgents(agentResult.agents);
+    setWorkspaces(workspaceResult.workspaces);
+    const host = paired[0]!;
+    const saved = await loadSelectedWorkspaceId(host.hostId);
+    const stillThere = workspaceResult.workspaces.some((w) => w.id === saved);
+    setSelectedWorkspaceId(stillThere ? saved : workspaceResult.workspaces[0]?.id ?? null);
+    const hostErrors = [...agentResult.errors, ...workspaceResult.errors];
+    setConnectionError(
+      hostErrors.length
+        ? `${hostErrors.length} host${hostErrors.length === 1 ? "" : "s"} unavailable`
+        : null,
+    );
     setLoading(false);
   }, []);
 
@@ -56,23 +79,45 @@ export default function InboxScreen() {
 
   const counts = countByFilter(agents);
 
+  function goAddRepository() {
+    if (hosts.length === 0) {
+      router.push("/pair");
+      return;
+    }
+    router.push("/repos/add");
+  }
+
+  async function selectWorkspace(ws: FleetWorkspace) {
+    setSelectedWorkspaceId(ws.id);
+    await saveSelectedWorkspaceId(ws.hostId, ws.id);
+  }
+
   async function submitComposer() {
     const prompt = draft.trim();
-    if (!prompt || hosts.length === 0) {
+    if (!prompt) return;
+    if (hosts.length === 0) {
       router.push("/pair");
+      return;
+    }
+    if (workspaces.length === 0) {
+      router.push("/repos/add");
       return;
     }
     if (launching) return;
     setLaunching(true);
     try {
       const host = hosts[0]!;
+      const workspace =
+        workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0]!;
       const client = new PocketHostClient(host);
-      const short =
-        prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
+      const short = prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
       const agent = await client.launch({
         name: short,
         prompt,
+        workspaceId: workspace.id,
+        cwd: workspace.cwd,
       });
+      await saveSelectedWorkspaceId(host.hostId, workspace.id);
       setDraft("");
       router.push({
         pathname: "/agent/[hostId]/[agentId]",
@@ -90,6 +135,11 @@ export default function InboxScreen() {
     }
   }
 
+  const emptyBody =
+    hosts.length === 0
+      ? "Pair a desktop bridge, then add a repository."
+      : "Add a GitHub repository or local folder on the host.";
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <ScrollView
@@ -105,7 +155,7 @@ export default function InboxScreen() {
       >
         <View style={styles.topBar}>
           <CircleButton
-            accessibilityLabel="Profile"
+            accessibilityLabel="Hosts"
             tone="elevated"
             onPress={() => router.push("/hosts")}
           >
@@ -117,7 +167,7 @@ export default function InboxScreen() {
             <CircleButton accessibilityLabel="Search" onPress={() => router.push("/agents/all")}>
               <Icon name="search" size={19} color={colors.ink} strokeWidth={1.9} />
             </CircleButton>
-            <CircleButton accessibilityLabel="Pair host" onPress={() => router.push("/pair")}>
+            <CircleButton accessibilityLabel="Add repository" onPress={goAddRepository}>
               <Icon name="folderPlus" size={19} color={colors.ink} strokeWidth={1.75} />
             </CircleButton>
           </View>
@@ -162,7 +212,7 @@ export default function InboxScreen() {
         {connectionError ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open workspaces to reconnect"
+            accessibilityLabel="Open hosts to reconnect"
             style={({ pressed }) => [styles.connectionNotice, pressed && styles.pressed]}
             onPress={() => router.push("/hosts")}
           >
@@ -174,38 +224,48 @@ export default function InboxScreen() {
 
         <Text style={styles.sectionLabel}>Workspaces</Text>
 
-        {hosts.length === 0 ? (
-          loading ? (
-            <View style={styles.loadingCard}>
-              <ActivityIndicator color={colors.muted2} />
+        {loading && workspaces.length === 0 && hosts.length > 0 ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={colors.muted2} />
+          </View>
+        ) : workspaces.length === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add a repository"
+            style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
+            onPress={goAddRepository}
+          >
+            <View style={styles.emptyIcon}>
+              <Icon name="folderPlus" size={19} color={colors.muted} strokeWidth={1.75} />
             </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add a workspace"
-              style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
-              onPress={() => router.push("/pair")}
-            >
-              <View style={styles.emptyIcon}>
-                <Icon name="folderPlus" size={19} color={colors.muted} strokeWidth={1.75} />
-              </View>
-              <View style={styles.emptyText}>
-                <Text style={styles.emptyTitle}>No workspaces yet</Text>
-                <Text style={styles.emptyBody}>Pair a desktop bridge to add one.</Text>
-              </View>
-              <Icon name="chevronRight" size={17} color={colors.muted2} strokeWidth={2} />
-            </Pressable>
-          )
+            <View style={styles.emptyText}>
+              <Text style={styles.emptyTitle}>No repositories yet</Text>
+              <Text style={styles.emptyBody}>{emptyBody}</Text>
+            </View>
+            <Icon name="chevronRight" size={17} color={colors.muted2} strokeWidth={2} />
+          </Pressable>
         ) : (
           <View style={styles.workspaces}>
-            {hosts.map((h) => (
+            {workspaces.map((w) => (
               <WorkspaceRow
-                key={h.hostId}
-                name={h.label}
+                key={w.id}
+                name={w.fullName ?? w.name}
+                subtitle={w.defaultBranch ? `${w.defaultBranch} · ${w.cwd}` : w.cwd}
                 variant="plain"
-                onPress={() => router.push("/hosts")}
+                icon={w.source === "github" ? "github" : "folder"}
+                selected={w.id === selectedWorkspaceId}
+                onPress={() => void selectWorkspace(w)}
               />
             ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add another repository"
+              style={({ pressed }) => [styles.addMore, pressed && styles.pressed]}
+              onPress={goAddRepository}
+            >
+              <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
+              <Text style={styles.addMoreText}>Add repository</Text>
+            </Pressable>
           </View>
         )}
 
@@ -219,7 +279,7 @@ export default function InboxScreen() {
         <PillComposer
           value={draft}
           onChangeText={setDraft}
-          onPlus={() => router.push("/pair")}
+          onPlus={goAddRepository}
           onSubmit={() => void submitComposer()}
           sending={launching}
           placeholder="Plan, ask, build..."
@@ -273,6 +333,13 @@ const styles = StyleSheet.create({
   connectionDot: { width: 7, height: 7, borderRadius: radii.circle, backgroundColor: colors.needsAttention },
   connectionText: { ...type.meta, color: colors.ink2, flex: 1 },
   workspaces: { gap: 0 },
+  addMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  addMoreText: { ...type.meta, color: colors.ink2, fontSize: 15, fontWeight: "500" },
   pressed: { opacity: 0.7 },
   loadingCard: {
     backgroundColor: colors.bgElevated,

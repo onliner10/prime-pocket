@@ -37,6 +37,10 @@ export interface HostCapabilities {
   images: boolean;
   /** Bridge is using a mock/demo adapter instead of a live Prime daemon. */
   demoMode: boolean;
+  /** Host can list/add workspaces (local folders / GitHub worktrees). */
+  workspaces: boolean;
+  /** Host exposes a GitHub catalog (live token/OAuth or mock). */
+  github: boolean;
 }
 
 export interface HostInfo {
@@ -147,11 +151,70 @@ export interface PairResponse {
 
 export interface LaunchAgentRequest {
   cwd?: string;
+  /** Preferred over bare cwd when the host manages workspaces. */
+  workspaceId?: WorkspaceId;
   name?: string;
   prompt?: string;
   model?: string;
   /** Resume an existing saved session id when supported. */
   resumeId?: string;
+}
+
+/** Opaque workspace id (a repo/worktree registered on the bridge). */
+export type WorkspaceId = string;
+
+/**
+ * A repository / worktree the paired host can run agents in.
+ * Distinct from PairedHost: one host owns many workspaces.
+ */
+export interface Workspace {
+  id: WorkspaceId;
+  /** Short display name, e.g. "prime-pocket". */
+  name: string;
+  /** owner/repo when known. */
+  fullName?: string;
+  /** Absolute path on the host machine. */
+  cwd: string;
+  defaultBranch?: string;
+  source: "github" | "local";
+  github?: {
+    owner: string;
+    repo: string;
+    private?: boolean;
+    htmlUrl?: string;
+  };
+  addedAt: string;
+}
+
+export interface GitHubStatus {
+  connected: boolean;
+  /** How GitHub is backed on this host. */
+  mode: "mock" | "token" | "oauth" | "disconnected";
+  /** True when catalog data is synthetic (safe for demos / e2e). */
+  mock: boolean;
+  login?: string;
+}
+
+export interface GitHubCatalogRepo {
+  id: string;
+  fullName: string;
+  description?: string;
+  private: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
+  /** Language label for list affordance, optional. */
+  language?: string;
+}
+
+export interface AddWorkspaceFromGitHubRequest {
+  fullName: string;
+  /** Optional override; host may invent a worktree path under its data dir. */
+  cwd?: string;
+}
+
+export interface AddLocalWorkspaceRequest {
+  name: string;
+  cwd: string;
 }
 
 export interface PromptImage {

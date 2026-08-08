@@ -309,6 +309,8 @@ export class PrimeDaemonBackend implements AgentBackend {
     launch: true,
     images: false, // artifact download not wired through daemon yet
     demoMode: false,
+    workspaces: true,
+    github: true,
   };
 
   private readonly hostId: HostId;

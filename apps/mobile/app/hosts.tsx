@@ -36,13 +36,14 @@ export default function HostsScreen() {
         <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
           <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
         </CircleButton>
-        <Text style={styles.title}>Workspaces</Text>
-        <CircleButton accessibilityLabel="Pair" onPress={() => router.push("/pair")}>
-          <Icon name="folderPlus" size={19} color={colors.ink} strokeWidth={1.75} />
+        <Text style={styles.title}>Hosts</Text>
+        <CircleButton accessibilityLabel="Pair host" onPress={() => router.push("/pair")}>
+          <Icon name="plus" size={19} color={colors.ink} strokeWidth={1.75} />
         </CircleButton>
       </View>
       <Text style={styles.help}>
-        Hosts are stored on-device. Remote access uses Tailscale or LAN — Pocket does not run a relay.
+        Paired bridges are stored on-device. Each host can expose many GitHub/local repositories as
+        workspaces. Remote access uses Tailscale or LAN — Pocket does not run a relay.
       </Text>
       <FlatList
         data={hosts}

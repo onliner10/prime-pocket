@@ -38,11 +38,20 @@ async function clearApp(page: import("@playwright/test").Page) {
 }
 
 async function pairViaUi(page: import("@playwright/test").Page, pairCode: string) {
-  await page.getByLabel("Pair host").first().click();
+  await page.getByLabel("Hosts").first().click();
+  await page.getByLabel("Pair host").click();
   await page.getByPlaceholder("http://127.0.0.1:17420").fill(BRIDGE);
   await page.getByPlaceholder("pair code").fill(pairCode);
   await page.getByText("Pair manually", { exact: true }).click();
-  await expect(page.getByText("ui-test").first()).toBeVisible({ timeout: 20000 });
+  await page.goto(EXPO, { waitUntil: "networkidle" });
+  await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 20000 });
+}
+
+async function addMockRepo(page: import("@playwright/test").Page, fullName = "acme/checkout-web") {
+  await page.getByLabel("Add a repository").click();
+  await expect(page.getByText(/Mock GitHub/i)).toBeVisible({ timeout: 15000 });
+  await page.getByLabel(`Add ${fullName}`).click();
+  await expect(page.getByText(fullName).first()).toBeVisible({ timeout: 20000 });
 }
 
 async function waitForAssistantIdle(page: import("@playwright/test").Page) {
@@ -85,6 +94,7 @@ test.describe("Multi-agent conversation demo video", () => {
     await page.waitForTimeout(900);
 
     await pairViaUi(page, currentPairCode());
+    await addMockRepo(page);
     await page.waitForTimeout(1000);
 
     // --- Agent 1 ---

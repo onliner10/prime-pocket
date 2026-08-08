@@ -1,8 +1,12 @@
 import {
   Routes,
+  type AddLocalWorkspaceRequest,
+  type AddWorkspaceFromGitHubRequest,
   type AgentSnapshot,
   type AgentSummary,
   type FollowUpRequest,
+  type GitHubCatalogRepo,
+  type GitHubStatus,
   type HostInfo,
   type LaunchAgentRequest,
   type NeedsInputReply,
@@ -12,6 +16,7 @@ import {
   type PromptRequest,
   type SteerRequest,
   type StreamServerMessage,
+  type Workspace,
 } from "@prime-pocket/protocol";
 
 export class PocketApiError extends Error {
@@ -98,6 +103,62 @@ export class PocketHostClient {
     const res = await fetch(this.url(Routes.agents), { headers: authHeaders(this.host.token) });
     const data = await parseJson<{ agents: AgentSummary[] }>(res);
     return data.agents;
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    const res = await fetch(this.url(Routes.workspaces), { headers: authHeaders(this.host.token) });
+    const data = await parseJson<{ workspaces: Workspace[] }>(res);
+    return data.workspaces;
+  }
+
+  async addLocalWorkspace(req: AddLocalWorkspaceRequest): Promise<Workspace> {
+    const res = await fetch(this.url(Routes.workspaces), {
+      method: "POST",
+      headers: authHeaders(this.host.token),
+      body: JSON.stringify(req),
+    });
+    const data = await parseJson<{ workspace: Workspace }>(res);
+    return data.workspace;
+  }
+
+  async addWorkspaceFromGitHub(req: AddWorkspaceFromGitHubRequest): Promise<Workspace> {
+    const res = await fetch(this.url(Routes.workspacesFromGitHub), {
+      method: "POST",
+      headers: authHeaders(this.host.token),
+      body: JSON.stringify(req),
+    });
+    const data = await parseJson<{ workspace: Workspace }>(res);
+    return data.workspace;
+  }
+
+  async removeWorkspace(id: string): Promise<void> {
+    const res = await fetch(this.url(Routes.workspace(id)), {
+      method: "DELETE",
+      headers: authHeaders(this.host.token),
+    });
+    await parseJson(res);
+  }
+
+  async githubStatus(): Promise<GitHubStatus> {
+    const res = await fetch(this.url(Routes.githubStatus), { headers: authHeaders(this.host.token) });
+    return parseJson(res);
+  }
+
+  async connectGitHub(): Promise<GitHubStatus> {
+    const res = await fetch(this.url(Routes.githubConnect), {
+      method: "POST",
+      headers: authHeaders(this.host.token),
+      body: "{}",
+    });
+    return parseJson(res);
+  }
+
+  async listGitHubRepos(query?: string): Promise<{ repos: GitHubCatalogRepo[]; status: GitHubStatus }> {
+    const q = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+    const res = await fetch(this.url(`${Routes.githubRepos}${q}`), {
+      headers: authHeaders(this.host.token),
+    });
+    return parseJson(res);
   }
 
   async launch(req: LaunchAgentRequest): Promise<AgentSummary> {
@@ -224,6 +285,30 @@ export async function listFleetAgents(
   );
   agents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return { agents, errors };
+}
+
+/** Aggregate repositories/worktrees across paired hosts. */
+export async function listFleetWorkspaces(
+  hosts: PairedHost[],
+): Promise<{ workspaces: Array<Workspace & { hostId: string }>; errors: Array<{ hostId: string; error: string }> }> {
+  const workspaces: Array<Workspace & { hostId: string }> = [];
+  const errors: Array<{ hostId: string; error: string }> = [];
+  await Promise.all(
+    hosts.map(async (host) => {
+      try {
+        const client = new PocketHostClient(host);
+        const list = await client.listWorkspaces();
+        workspaces.push(...list.map((w) => ({ ...w, hostId: host.hostId })));
+      } catch (e) {
+        errors.push({
+          hostId: host.hostId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }),
+  );
+  workspaces.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+  return { workspaces, errors };
 }
 
 /** Re-resolve a reachable base URL from the host's advertised list (Tailscale/LAN failover). */

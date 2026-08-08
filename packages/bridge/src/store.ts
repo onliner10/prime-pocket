@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import selfsigned from "selfsigned";
+import type { Workspace } from "@prime-pocket/protocol";
 
 export interface BridgeIdentity {
   hostId: string;
@@ -25,6 +26,8 @@ export interface BridgeStoreData {
   pairCodeExpiresAt: string;
   ntfyTopic?: string;
   ntfyServer?: string;
+  /** Repositories / worktrees registered on this host. */
+  workspaces: Workspace[];
 }
 
 function defaultDataDir(): string {
@@ -34,6 +37,7 @@ function defaultDataDir(): string {
 export function ensureDataDir(dir = defaultDataDir()): string {
   mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "artifacts"), { recursive: true });
+  mkdirSync(join(dir, "worktrees"), { recursive: true });
   return dir;
 }
 
@@ -77,13 +81,15 @@ export class BridgeStore {
     this.dataDir = ensureDataDir(dataDir);
     const path = storePath(this.dataDir);
     if (existsSync(path)) {
-      this.data = JSON.parse(readFileSync(path, "utf8")) as BridgeStoreData;
+      const loaded = JSON.parse(readFileSync(path, "utf8")) as BridgeStoreData;
+      this.data = { ...loaded, workspaces: loaded.workspaces ?? [] };
     } else {
       this.data = {
         identity: createIdentity(hostName),
         tokens: [],
         pairCode: randomBytes(4).toString("hex"),
         pairCodeExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        workspaces: [],
       };
       this.save();
     }
@@ -160,5 +166,45 @@ export class BridgeStore {
 
   artifactPath(agentId: string, artifactId: string): string {
     return join(this.dataDir, "artifacts", agentId, artifactId);
+  }
+
+  listWorkspaces(): Workspace[] {
+    return [...(this.data.workspaces ?? [])].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+  }
+
+  getWorkspace(id: string): Workspace | undefined {
+    return (this.data.workspaces ?? []).find((w) => w.id === id);
+  }
+
+  findWorkspaceByCwd(cwd: string): Workspace | undefined {
+    return (this.data.workspaces ?? []).find((w) => w.cwd === cwd);
+  }
+
+  findWorkspaceByFullName(fullName: string): Workspace | undefined {
+    const key = fullName.trim().toLowerCase();
+    return (this.data.workspaces ?? []).find((w) => w.fullName?.toLowerCase() === key);
+  }
+
+  upsertWorkspace(workspace: Workspace): Workspace {
+    const list = this.data.workspaces ?? [];
+    const idx = list.findIndex((w) => w.id === workspace.id);
+    if (idx >= 0) list[idx] = workspace;
+    else list.push(workspace);
+    this.data.workspaces = list;
+    this.save();
+    return workspace;
+  }
+
+  removeWorkspace(id: string): boolean {
+    const before = (this.data.workspaces ?? []).length;
+    this.data.workspaces = (this.data.workspaces ?? []).filter((w) => w.id !== id);
+    this.save();
+    return this.data.workspaces.length < before;
+  }
+
+  /** Local path under dataDir/worktrees for a GitHub full name. */
+  worktreePathFor(fullName: string): string {
+    const safe = fullName.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+    return join(this.dataDir, "worktrees", safe);
   }
 }

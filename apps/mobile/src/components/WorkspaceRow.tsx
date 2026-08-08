@@ -1,32 +1,51 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radii, shadows, type } from "../theme";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
 export function WorkspaceRow({
   name,
+  subtitle,
   onPress,
   variant = "card",
+  icon = "folder",
+  selected = false,
 }: {
   name: string;
+  subtitle?: string;
   onPress?: () => void;
   /** "plain" drops the card chrome for rows nested inside another card. */
   variant?: "card" | "plain";
+  icon?: IconName;
+  selected?: boolean;
 }) {
   const card = variant === "card";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={name}
+      accessibilityLabel={subtitle ? `${name}, ${subtitle}` : name}
+      accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, card ? styles.rowCard : styles.rowPlain, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        card ? styles.rowCard : styles.rowPlain,
+        selected && styles.rowSelected,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={styles.left}>
         <View style={[styles.folder, !card && styles.folderPlain]}>
-          <Icon name="folder" size={18} color={colors.ink2} strokeWidth={1.7} />
+          <Icon name={icon} size={18} color={colors.ink2} strokeWidth={1.7} />
         </View>
-        <Text style={styles.name} numberOfLines={1}>
-          {name}
-        </Text>
+        <View style={styles.textCol}>
+          <Text style={styles.name} numberOfLines={1}>
+            {name}
+          </Text>
+          {subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <Icon name="chevronRight" size={16} color={colors.muted2} strokeWidth={2.1} />
     </Pressable>
@@ -55,8 +74,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
+  rowSelected: {
+    backgroundColor: "#F0F4F8",
+  },
   pressed: { opacity: 0.7 },
   left: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  textCol: { flex: 1, gap: 1 },
   folder: {
     width: 34,
     height: 34,
@@ -71,5 +94,6 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     backgroundColor: "transparent",
   },
-  name: { ...type.row, fontSize: 18, lineHeight: 23, fontWeight: "400", flex: 1 },
+  name: { ...type.row, fontSize: 18, lineHeight: 23, fontWeight: "400" },
+  subtitle: { ...type.meta, fontSize: 12, fontWeight: "400", color: colors.muted },
 });

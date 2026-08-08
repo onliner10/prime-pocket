@@ -9,6 +9,8 @@ import {
   encodePairingQr,
   sanitizeArtifactFilename,
   validatePromptImages,
+  type AddLocalWorkspaceRequest,
+  type AddWorkspaceFromGitHubRequest,
   type AgentEvent,
   type AgentId,
   type ApiErrorBody,
@@ -23,11 +25,16 @@ import {
   type SteerRequest,
   type StreamClientMessage,
   type StreamServerMessage,
+  type Workspace,
 } from "@prime-pocket/protocol";
+import { randomBytes } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import type { AgentBackend } from "./backend/types.js";
 import { BridgeStore } from "./store.js";
 import { collectAdvertisedUrls, pickPreferredUrl } from "./network.js";
 import { publishNtfy } from "./ntfy.js";
+import type { GitHubProvider } from "./github.js";
+import { createGitHubProvider } from "./github.js";
 
 export interface BridgeServerOptions {
   store: BridgeStore;
@@ -35,6 +42,8 @@ export interface BridgeServerOptions {
   port: number;
   /** Prefer HTTPS with the store identity cert. Set false only for local tests. */
   tls?: boolean;
+  /** GitHub catalog provider; defaults from demo/env. */
+  github?: GitHubProvider;
 }
 
 function readBody(req: IncomingMessage, maxBytes = MAX_HTTP_BODY_BYTES): Promise<string> {
@@ -62,7 +71,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     "content-length": Buffer.byteLength(data),
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
   });
   res.end(data);
 }
@@ -84,6 +93,7 @@ function bearerToken(req: IncomingMessage, url?: URL): string | undefined {
 export class BridgeServer {
   readonly store: BridgeStore;
   readonly backend: AgentBackend;
+  readonly github: GitHubProvider;
   readonly port: number;
   private readonly tls: boolean;
   private server: HttpsServer | ReturnType<typeof createHttpServer> | null = null;
@@ -97,6 +107,9 @@ export class BridgeServer {
     this.backend = opts.backend;
     this.port = opts.port;
     this.tls = opts.tls !== false;
+    this.github =
+      opts.github ??
+      createGitHubProvider({ mock: Boolean(this.backend.capabilities.demoMode) });
   }
 
   async start(): Promise<{ urls: string[]; pairing: PairingQrPayload; pairingDeepLink: string }> {
@@ -206,7 +219,7 @@ export class BridgeServer {
         res.writeHead(204, {
           "access-control-allow-origin": "*",
           "access-control-allow-headers": "authorization, content-type",
-          "access-control-allow-methods": "GET,POST,OPTIONS",
+          "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
         });
         res.end();
         return;
@@ -256,6 +269,121 @@ export class BridgeServer {
         return;
       }
 
+      if (req.method === "GET" && path === Routes.workspaces) {
+        if (!this.requireAuth(req, res, url)) return;
+        sendJson(res, 200, { workspaces: this.store.listWorkspaces() });
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.workspaces) {
+        if (!this.requireAuth(req, res, url)) return;
+        const body = JSON.parse((await readBody(req)) || "{}") as AddLocalWorkspaceRequest;
+        if (!body.name?.trim() || !body.cwd?.trim()) {
+          sendError(res, 400, "name and cwd required", "bad_request");
+          return;
+        }
+        const existing = this.store.findWorkspaceByCwd(body.cwd.trim());
+        if (existing) {
+          sendJson(res, 200, { workspace: existing });
+          return;
+        }
+        const workspace: Workspace = {
+          id: `ws_${randomBytes(8).toString("hex")}`,
+          name: body.name.trim(),
+          cwd: body.cwd.trim(),
+          source: "local",
+          addedAt: new Date().toISOString(),
+        };
+        mkdirSync(workspace.cwd, { recursive: true });
+        this.store.upsertWorkspace(workspace);
+        sendJson(res, 201, { workspace });
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.workspacesFromGitHub) {
+        if (!this.requireAuth(req, res, url)) return;
+        const body = JSON.parse((await readBody(req)) || "{}") as AddWorkspaceFromGitHubRequest;
+        if (!body.fullName?.trim()) {
+          sendError(res, 400, "fullName required", "bad_request");
+          return;
+        }
+        const fullName = body.fullName.trim();
+        const existing = this.store.findWorkspaceByFullName(fullName);
+        if (existing) {
+          sendJson(res, 200, { workspace: existing });
+          return;
+        }
+        const repo = await this.github.findRepo(fullName);
+        if (!repo) {
+          sendError(res, 404, `GitHub repository not found: ${fullName}`, "not_found");
+          return;
+        }
+        const [owner, repoName] = repo.fullName.split("/");
+        const cwd = body.cwd?.trim() || this.store.worktreePathFor(repo.fullName);
+        mkdirSync(cwd, { recursive: true });
+        const workspace: Workspace = {
+          id: `ws_${randomBytes(8).toString("hex")}`,
+          name: repoName || repo.fullName,
+          fullName: repo.fullName,
+          cwd,
+          defaultBranch: repo.defaultBranch,
+          source: "github",
+          github: {
+            owner: owner || "",
+            repo: repoName || repo.fullName,
+            private: repo.private,
+            htmlUrl: repo.htmlUrl,
+          },
+          addedAt: new Date().toISOString(),
+        };
+        this.store.upsertWorkspace(workspace);
+        sendJson(res, 201, { workspace });
+        return;
+      }
+
+      const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)$/);
+      if (workspaceMatch && req.method === "DELETE") {
+        if (!this.requireAuth(req, res, url)) return;
+        const id = decodeURIComponent(workspaceMatch[1]!);
+        const ok = this.store.removeWorkspace(id);
+        if (!ok) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === "GET" && path === Routes.githubStatus) {
+        if (!this.requireAuth(req, res, url)) return;
+        sendJson(res, 200, this.github.status());
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.githubConnect) {
+        if (!this.requireAuth(req, res, url)) return;
+        try {
+          const status = await this.github.connect();
+          sendJson(res, 200, status);
+        } catch (e) {
+          sendError(res, 400, e instanceof Error ? e.message : String(e), "github_unavailable");
+        }
+        return;
+      }
+
+      if (req.method === "GET" && path === Routes.githubRepos) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = this.github.status();
+        if (!status.connected) {
+          sendError(res, 401, "GitHub not connected on this host", "github_disconnected");
+          return;
+        }
+        const q = url.searchParams.get("q") ?? undefined;
+        const repos = await this.github.listRepos(q);
+        sendJson(res, 200, { repos, status });
+        return;
+      }
+
       if (req.method === "GET" && path === Routes.agents) {
         if (!this.requireAuth(req, res, url)) return;
         const agents = await this.backend.listAgents();
@@ -266,7 +394,16 @@ export class BridgeServer {
       if (req.method === "POST" && path === Routes.agents) {
         if (!this.requireAuth(req, res, url)) return;
         const body = JSON.parse((await readBody(req)) || "{}") as LaunchAgentRequest;
-        const agent = await this.backend.launch(body);
+        let launchReq = body;
+        if (body.workspaceId) {
+          const ws = this.store.getWorkspace(body.workspaceId);
+          if (!ws) {
+            sendError(res, 404, "Workspace not found", "not_found");
+            return;
+          }
+          launchReq = { ...body, cwd: body.cwd ?? ws.cwd };
+        }
+        const agent = await this.backend.launch(launchReq);
         sendJson(res, 201, { agent });
         return;
       }

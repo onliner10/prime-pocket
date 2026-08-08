@@ -1,5 +1,5 @@
 /**
- * Phone-viewport demo video: pair with bridge, add workspace, submit first task.
+ * Phone-viewport demo: pair host → add GitHub repo (mock) → submit first task.
  */
 import { test, expect } from "@playwright/test";
 import { readFileSync, mkdirSync } from "node:fs";
@@ -47,51 +47,56 @@ async function typeSlow(
 }
 
 test.describe("Onboarding demo video", () => {
-  test("pair, add workspace, submit first task", async ({ page }) => {
+  test("pair, add GitHub repo, submit first task", async ({ page }) => {
     mkdirSync(OUT, { recursive: true });
     test.setTimeout(180_000);
 
     await clearApp(page);
     await expect(page.getByText("Inbox").first()).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText("No workspaces yet")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 10000 });
     await waitFonts(page);
-    // Hold empty inbox so viewers can read "No workspaces yet"
-    await page.waitForTimeout(2800);
+    await page.waitForTimeout(2000);
 
-    // Pair with desktop bridge (adds the workspace / repository)
-    await page.getByLabel("Add a workspace").click();
+    // Pair host (required before repos)
+    await page.getByLabel("Hosts").click();
+    await expect(page.getByText("Hosts").first()).toBeVisible({ timeout: 10000 });
+    await page.getByLabel("Pair host").click();
     await expect(page.getByText("Pair host").first()).toBeVisible({ timeout: 10000 });
-    await waitFonts(page);
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(900);
 
     const pairCode = currentPairCode();
     const urlBox = page.getByPlaceholder("http://127.0.0.1:17420");
     await urlBox.click();
-    await page.waitForTimeout(300);
     await urlBox.fill("");
-    await urlBox.pressSequentially(BRIDGE, { delay: 35 });
+    await urlBox.pressSequentially(BRIDGE, { delay: 30 });
+    await page.waitForTimeout(400);
+    await typeSlow(page, page.getByPlaceholder("pair code"), pairCode, 80);
     await page.waitForTimeout(700);
-
-    const codeBox = page.getByPlaceholder("pair code");
-    await typeSlow(page, codeBox, pairCode, 90);
-    await page.waitForTimeout(1000);
-
     await page.getByText("Pair manually", { exact: true }).click();
 
-    // Expo stack can leave a prior Inbox node "hidden"; assert on the paired workspace.
-    await expect(page.getByText("ui-test").first()).toBeVisible({ timeout: 20000 });
-    await expect(page.getByPlaceholder("Plan, ask, build...").last()).toBeVisible({
-      timeout: 10000,
-    });
+    // After pair, hosts list or inbox — go home
+    await page.waitForTimeout(800);
+    await page.goto(EXPO, { waitUntil: "networkidle" });
+    await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 20000 });
     await waitFonts(page);
-    // Hold paired inbox so the new workspace row is readable
-    await page.waitForTimeout(2800);
+    await page.waitForTimeout(1600);
 
-    // Submit first task into the newly paired workspace
+    // Add repository from mock GitHub
+    await page.getByLabel("Add a repository").click();
+    await expect(page.getByText("Add repository").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Mock GitHub/i)).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(1200);
+
+    await page.getByLabel("Add acme/checkout-web").click();
+    await expect(page.getByText("acme/checkout-web").first()).toBeVisible({ timeout: 20000 });
+    await waitFonts(page);
+    await page.waitForTimeout(2000);
+
+    // Submit first task into that workspace
     const prompt = "Add a hello world script in TypeScript";
     const composer = page.getByPlaceholder("Plan, ask, build...").last();
-    await typeSlow(page, composer, prompt, 45);
-    await page.waitForTimeout(1200);
+    await typeSlow(page, composer, prompt, 40);
+    await page.waitForTimeout(900);
     await page.getByRole("button", { name: "Send" }).click();
 
     await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 25000 });
@@ -101,12 +106,9 @@ test.describe("Onboarding demo video", () => {
       if (live === 0) break;
       await page.waitForTimeout(250);
     }
-    await page.waitForTimeout(1200);
-
-    // Hold on the completed first-task thread for the video ending
     await expect(
       page.getByText(/Got it|hello|TypeScript|script|demo|created|file/i).first(),
     ).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(3500);
+    await page.waitForTimeout(3000);
   });
 });
