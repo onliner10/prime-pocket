@@ -5,11 +5,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TamaguiProvider, useTheme } from "tamagui";
 import { ToastProvider, ToastViewport } from "@tamagui/toast";
 import { config } from "../tamagui.config";
-import { injectWebFonts } from "../src/webFonts";
+import { injectWebShellCss } from "../src/webShell";
 import { proofSafeArea } from "../src/ui/insets";
 import { Toasts } from "../src/ui/Toasts";
 
-if (Platform.OS === "web") injectWebFonts();
+if (Platform.OS === "web") injectWebShellCss();
 
 export default function RootLayout() {
   const scheme = useColorScheme();

@@ -1,5 +1,7 @@
 /**
- * Web font CSS for the self-hosted variable Geist in public/fonts.
+ * The web document shell: self-hosted variable Geist from public/fonts, plus
+ * the handful of page-level rules Tamagui cannot reach because they live above
+ * the React root.
  *
  * Two consumers, one source: app/+html.tsx renders this into the document head
  * for static export, and app/_layout.tsx injects it at runtime because the Expo
@@ -7,9 +9,9 @@
  * runtime path, dev and Playwright screenshots silently fall back to whatever
  * sans the host machine has.
  */
-export const WEB_FONT_STYLE_ID = "pocket-web-fonts";
+export const WEB_SHELL_STYLE_ID = "pocket-web-shell";
 
-export const WEB_FONT_CSS = `
+export const WEB_SHELL_CSS = `
 @font-face {
   font-family: 'Geist';
   font-style: normal;
@@ -68,14 +70,18 @@ input, textarea, button {
   font-family: inherit;
   font-synthesis: none;
 }
+textarea {
+  /* The browser's drag-to-resize grabber has no counterpart on a phone. */
+  resize: none;
+}
 `;
 
 /** Idempotent — safe to call on every module evaluation / fast refresh. */
-export function injectWebFonts(): void {
+export function injectWebShellCss(): void {
   if (typeof document === "undefined") return;
-  if (document.getElementById(WEB_FONT_STYLE_ID)) return;
+  if (document.getElementById(WEB_SHELL_STYLE_ID)) return;
   const style = document.createElement("style");
-  style.id = WEB_FONT_STYLE_ID;
-  style.textContent = WEB_FONT_CSS;
+  style.id = WEB_SHELL_STYLE_ID;
+  style.textContent = WEB_SHELL_CSS;
   document.head.appendChild(style);
 }
