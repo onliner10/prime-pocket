@@ -21,6 +21,8 @@ export function resolveImageUri(
 
 const Frame = styled(YStack, {
   name: "ImageFrame",
+  // Explicit so the spinner and play badge anchor to the frame, not the page.
+  position: "relative",
   width: 160,
   height: 110,
   rounded: 14,
@@ -130,12 +132,12 @@ function RemoteImage({
   return (
     <Frame compact={compact} wide={wide}>
       {loading ? (
-        <YStack position="absolute" inset={0} items="center" justify="center">
+        <YStack position="absolute" t={0} l={0} r={0} b={0} items="center" justify="center">
           <Spinner color="$color9" />
         </YStack>
       ) : null}
       <Image
-        source={{ uri }}
+        src={uri}
         width="100%"
         height="100%"
         objectFit="cover"

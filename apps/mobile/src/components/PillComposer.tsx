@@ -236,8 +236,21 @@ export function PillComposer({
             contentContainerStyle={{ flexDirection: "row", paddingBottom: 4 }}
           >
             {pendingImages.map((img) => (
-              <YStack key={img.id} mr={10} enterStyle={{ opacity: 0, scale: 0.9 }} transition="quick">
-                <Image source={{ uri: img.uri }} width={72} height={72} rounded={14} bg="$color3" />
+              <YStack
+                key={img.id}
+                position="relative"
+                mr={10}
+                enterStyle={{ opacity: 0, scale: 0.9 }}
+                transition="quick"
+              >
+                <Image
+                  src={img.uri}
+                  objectFit="cover"
+                  width={72}
+                  height={72}
+                  rounded={14}
+                  bg="$color3"
+                />
                 <Button
                   aria-label="Remove image"
                   circular
@@ -270,7 +283,11 @@ export function PillComposer({
             unstyled
             bg="transparent"
             borderWidth={0}
+            // The composer card itself is the focus affordance; a second ring
+            // inside it just looks like a bug.
             outlineWidth={0}
+            outlineStyle="none"
+            focusStyle={{ outlineWidth: 0, outlineStyle: "none" }}
             color="$color"
             fontFamily="$body"
             fontSize="$6"

@@ -15,6 +15,9 @@ const ScreenFrame = styled(YStack, {
   name: "Screen",
   flex: 1,
   bg: "$background",
+  // Tamagui's web stacks are `position: static`, unlike React Native's default.
+  // Screens anchor docks and overlays, so pin the containing block here.
+  position: "relative",
 });
 
 /**

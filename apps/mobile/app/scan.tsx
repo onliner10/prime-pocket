@@ -104,7 +104,7 @@ export default function ScanScreen() {
   }
 
   return (
-    <YStack flex={1} bg="$background" justify="center">
+    <YStack flex={1} position="relative" bg="$background" justify="center">
       <CameraView
         style={StyleSheet.absoluteFill}
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}

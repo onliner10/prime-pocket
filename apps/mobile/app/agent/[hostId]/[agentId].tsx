@@ -562,6 +562,8 @@ export default function AgentScreen() {
           height={44}
           justify="center"
           pointerEvents="box-none"
+          enterStyle={{ opacity: 0, y: 10 }}
+          transition="medium"
         >
           <XStack items="center" gap={8}>
             <ActionPill aria-label="View PR" onPress={() => undefined}>

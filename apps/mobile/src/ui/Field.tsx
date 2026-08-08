@@ -12,7 +12,10 @@ const fieldChrome = {
   py: 13,
   placeholderTextColor: "$color8",
   transition: "quicker",
-  focusStyle: { borderColor: "$color8", outlineWidth: 0 },
+  outlineStyle: "none",
+  // The border darkens on focus, so the browser ring would be a second,
+  // differently-shaped affordance on top of it.
+  focusStyle: { borderColor: "$color8", outlineWidth: 0, outlineStyle: "none" },
   hoverStyle: { borderColor: "$color4" },
 } as const;
 
