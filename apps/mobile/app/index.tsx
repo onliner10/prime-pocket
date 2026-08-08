@@ -19,6 +19,7 @@ import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
 import { StatusCard } from "../src/components/StatusCard";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
+import { ComposerDock } from "../src/components/ComposerDock";
 import { PillComposer } from "../src/components/PillComposer";
 
 export default function InboxScreen() {
@@ -212,10 +213,7 @@ export default function InboxScreen() {
         <View style={[styles.dockSpacer, { height: 96 + bottomInset }]} />
       </ScrollView>
 
-      <View
-        style={[styles.composerDock, { bottom: Math.max(14, bottomInset + 10) }]}
-        pointerEvents="box-none"
-      >
+      <ComposerDock restingBottom={Math.max(14, bottomInset + 10)}>
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -224,7 +222,7 @@ export default function InboxScreen() {
           sending={launching}
           placeholder="Plan, ask, build..."
         />
-      </View>
+      </ComposerDock>
     </SafeAreaView>
   );
 }
@@ -304,9 +302,4 @@ const styles = StyleSheet.create({
   emptyTitle: type.row,
   emptyBody: { ...type.meta, fontSize: 12, fontWeight: "400" },
   dockSpacer: { height: 96 },
-  composerDock: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-  },
 });
