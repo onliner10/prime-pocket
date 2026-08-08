@@ -3,16 +3,8 @@ import { useCallback, useMemo, useState } from "react";
 import { FlatList, RefreshControl } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { IconProps } from "@tamagui/helpers-icon";
-import {
-  Bell,
-  CheckCircle2,
-  ChevronLeft,
-  Radio,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-} from "@tamagui/lucide-icons-2";
-import { H1, SizableText, useTheme, XStack } from "tamagui";
+import { Bell, CheckCircle2, ChevronLeft, Radio, Search, Sparkles } from "@tamagui/lucide-icons-2";
+import { H1, SizableText, Tabs, useTheme, XStack } from "tamagui";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
 import { listFleetAgents } from "../../src/api";
 import { loadPairedHosts } from "../../src/storage";
@@ -39,6 +31,16 @@ const TITLES: Record<InboxFilter, string> = {
   needs_attention: "Needs Attention",
   in_review: "In Review",
 };
+
+/** Short forms — the full titles do not fit four across at 390pt. */
+const TABS: Record<InboxFilter, string> = {
+  all: "All",
+  working: "Working",
+  needs_attention: "Attention",
+  in_review: "Review",
+};
+
+const FILTER_ORDER: InboxFilter[] = ["all", "working", "needs_attention", "in_review"];
 
 const EMPTY: Record<
   InboxFilter,
@@ -122,16 +124,10 @@ export default function AgentsFilterScreen() {
           icon={<ChevronLeft size={19} strokeWidth={2} />}
           onPress={() => router.back()}
         />
-        <XStack gap={10}>
-          <IconButton aria-label="Search" icon={<Search size={19} strokeWidth={1.9} />} />
-          <IconButton
-            aria-label="Filter"
-            icon={<SlidersHorizontal size={19} strokeWidth={1.9} />}
-          />
-        </XStack>
+        <IconButton aria-label="Search" icon={<Search size={19} strokeWidth={1.9} />} />
       </AppHeader>
 
-      <Gutter mt={22} mb={16}>
+      <Gutter mt={22} mb={14}>
         <H1 fontSize="$10" fontWeight="500" color="$color">
           {title}
         </H1>
@@ -140,6 +136,57 @@ export default function AgentsFilterScreen() {
             {filtered.length} {filtered.length === 1 ? "agent" : "agents"}
           </Meta>
         ) : null}
+      </Gutter>
+
+      <Gutter mb={14}>
+        <Tabs
+          value={filter}
+          onValueChange={(next) =>
+            router.replace({ pathname: "/agents/[filter]", params: { filter: next } })
+          }
+          orientation="horizontal"
+          flexDirection="column"
+        >
+          {/* $color2 is the page background, so the track needs $color3 to read
+              as recessed rather than as a pill floating on nothing. */}
+          <Tabs.List unstyled bg="$color3" rounded={999} p={3}>
+            {FILTER_ORDER.map((key) => {
+              const active = key === filter;
+              return (
+                <Tabs.Tab
+                  key={key}
+                  unstyled
+                  value={key}
+                  aria-label={`Show ${TITLES[key]}`}
+                  flex={1}
+                  height={34}
+                  // Group zeroes the inner radii to weld segments together; each
+                  // tab here is its own pill riding inside the track instead.
+                  rounded={999}
+                  items="center"
+                  justify="center"
+                  cursor="pointer"
+                  transition="quick"
+                  bg={active ? "$color1" : "transparent"}
+                  shadowColor="$shadowColor"
+                  shadowOpacity={active ? 1 : 0}
+                  shadowRadius={4}
+                  shadowOffset={{ width: 0, height: 1 }}
+                  hoverStyle={{ bg: active ? "$color1" : "$color4" }}
+                  pressStyle={{ opacity: 0.7 }}
+                >
+                  <SizableText
+                    fontSize="$3"
+                    fontWeight={active ? "600" : "400"}
+                    color={active ? "$color12" : "$color10"}
+                  >
+                    {TABS[key]}
+                  </SizableText>
+                </Tabs.Tab>
+              );
+            })}
+          </Tabs.List>
+        </Tabs>
       </Gutter>
 
       {connectionError ? (

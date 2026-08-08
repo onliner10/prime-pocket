@@ -40,7 +40,7 @@ test.describe("dark scheme", () => {
       // The screen shell paints Tamagui's dark $background. Proves the scheme
       // reached the theme and not just the static CSS shell.
       const hasDarkSurface = await page.evaluate(() =>
-        [...document.querySelectorAll("#root *")].some(
+        Array.from(document.querySelectorAll("#root *")).some(
           (el) => getComputedStyle(el).backgroundColor === "rgb(18, 18, 18)",
         ),
       );
