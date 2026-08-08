@@ -16,6 +16,7 @@ import {
   type ApiErrorBody,
   type CreateWorktreeRequest,
   type FollowUpRequest,
+  type GitHubCatalogRepo,
   type GitHubConnectRequest,
   type HostInfo,
   type LaunchAgentRequest,
@@ -38,7 +39,7 @@ import { BridgeStore } from "./store.js";
 import { collectAdvertisedUrls, pickPreferredUrl } from "./network.js";
 import { publishNtfy } from "./ntfy.js";
 import type { GitHubProvider } from "./github.js";
-import { createGitHubProvider } from "./github.js";
+import { GitHubApiError, createGitHubProvider } from "./github.js";
 
 export interface BridgeServerOptions {
   store: BridgeStore;
@@ -85,6 +86,18 @@ function sendError(res: ServerResponse, status: number, error: string, code?: st
   sendJson(res, status, body);
 }
 
+/**
+ * Report GitHub failures without reusing 401/403 — the app reads those as "this host
+ * no longer trusts the phone" and would send the user back to pairing.
+ */
+function sendGitHubError(res: ServerResponse, err: unknown): void {
+  if (err instanceof GitHubApiError) {
+    sendError(res, err.status >= 500 ? 502 : 400, err.message, err.code);
+    return;
+  }
+  sendError(res, 400, err instanceof Error ? err.message : String(err), "github_unavailable");
+}
+
 function bearerToken(req: IncomingMessage, url?: URL): string | undefined {
   const h = req.headers.authorization;
   if (h?.startsWith(BEARER_PREFIX)) {
@@ -113,7 +126,17 @@ export class BridgeServer {
     this.tls = opts.tls !== false;
     this.github =
       opts.github ??
-      createGitHubProvider({ mock: Boolean(this.backend.capabilities.demoMode) });
+      createGitHubProvider({
+        mock: Boolean(this.backend.capabilities.demoMode),
+        getToken: () => {
+          const auth = this.store.getGitHubAuth();
+          return auth ? { token: auth.token, login: auth.login } : undefined;
+        },
+        setToken: (auth) => {
+          if (auth) this.store.setGitHubAuth(auth);
+          else this.store.clearGitHubAuth();
+        },
+      });
   }
 
   async start(): Promise<{ urls: string[]; pairing: PairingQrPayload; pairingDeepLink: string }> {
@@ -318,7 +341,13 @@ export class BridgeServer {
           sendJson(res, 200, { workspace: existing });
           return;
         }
-        const repo = await this.github.findRepo(fullName);
+        let repo: GitHubCatalogRepo | undefined;
+        try {
+          repo = await this.github.findRepo(fullName);
+        } catch (e) {
+          sendGitHubError(res, e);
+          return;
+        }
         if (!repo) {
           sendError(res, 404, `GitHub repository not found: ${fullName}`, "not_found");
           return;
@@ -466,7 +495,7 @@ export class BridgeServer {
           const status = await this.github.connect(body);
           sendJson(res, 200, status);
         } catch (e) {
-          sendError(res, 400, e instanceof Error ? e.message : String(e), "github_unavailable");
+          sendGitHubError(res, e);
         }
         return;
       }
@@ -486,8 +515,12 @@ export class BridgeServer {
           return;
         }
         const q = url.searchParams.get("q") ?? undefined;
-        const repos = await this.github.listRepos(q);
-        sendJson(res, 200, { repos, status });
+        try {
+          const repos = await this.github.listRepos(q);
+          sendJson(res, 200, { repos, status });
+        } catch (e) {
+          sendGitHubError(res, e);
+        }
         return;
       }
 
@@ -502,8 +535,12 @@ export class BridgeServer {
         const owner = decodeURIComponent(branchMatch[1]!);
         const repo = decodeURIComponent(branchMatch[2]!);
         const fullName = `${owner}/${repo}`;
-        const branches = await this.github.listBranches(fullName);
-        sendJson(res, 200, { branches, fullName });
+        try {
+          const branches = await this.github.listBranches(fullName);
+          sendJson(res, 200, { branches, fullName });
+        } catch (e) {
+          sendGitHubError(res, e);
+        }
         return;
       }
 

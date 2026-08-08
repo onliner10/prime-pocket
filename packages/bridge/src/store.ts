@@ -19,6 +19,14 @@ export interface StoredToken {
   createdAt: string;
 }
 
+/** Host-side GitHub credential. Never leaves this machine. */
+export interface StoredGitHubAuth {
+  mode: "token";
+  token: string;
+  login?: string;
+  connectedAt?: string;
+}
+
 /** Legacy shape when workspace still carried a cwd. */
 type LegacyWorkspace = Workspace & { cwd?: string };
 
@@ -29,6 +37,8 @@ export interface BridgeStoreData {
   pairCodeExpiresAt: string;
   ntfyTopic?: string;
   ntfyServer?: string;
+  /** Persisted GitHub connection for live (non-mock) hosts. */
+  github?: StoredGitHubAuth;
   /** Linked repositories on this host. */
   workspaces: Workspace[];
   /** Branch checkouts where agents run. */
@@ -151,6 +161,7 @@ export class BridgeStore {
       this.data.tokens = onDisk.tokens ?? this.data.tokens;
       this.data.ntfyTopic = onDisk.ntfyTopic;
       this.data.ntfyServer = onDisk.ntfyServer;
+      this.data.github = onDisk.github;
     } catch {
       // keep in-memory state if disk is temporarily unreadable
     }
@@ -202,6 +213,27 @@ export class BridgeStore {
   setNtfy(topic: string | undefined, server?: string): void {
     this.data.ntfyTopic = topic;
     this.data.ntfyServer = server;
+    this.save();
+  }
+
+  getGitHubAuth(): StoredGitHubAuth | undefined {
+    return this.data.github;
+  }
+
+  setGitHubAuth(auth: { token: string; login?: string }): StoredGitHubAuth {
+    const row: StoredGitHubAuth = {
+      mode: "token",
+      token: auth.token,
+      login: auth.login,
+      connectedAt: new Date().toISOString(),
+    };
+    this.data.github = row;
+    this.save();
+    return row;
+  }
+
+  clearGitHubAuth(): void {
+    delete this.data.github;
     this.save();
   }
 

@@ -26,6 +26,10 @@ program
   .option("--ntfy-topic <topic>", "Optional ntfy topic for remote alerts")
   .option("--ntfy-server <url>", "ntfy server base URL", "https://ntfy.sh")
   .option("--daemon-socket <path>", "Prime daemon socket path")
+  .option(
+    "--github-token <token>",
+    "GitHub personal access token to store on this host (or set PRIME_POCKET_GITHUB_TOKEN)",
+  )
   .action(async (opts: {
     port: string;
     demo?: boolean;
@@ -35,10 +39,14 @@ program
     ntfyTopic?: string;
     ntfyServer?: string;
     daemonSocket?: string;
+    githubToken?: string;
   }) => {
     const store = new BridgeStore(opts.dataDir, opts.hostName);
     if (opts.ntfyTopic) {
       store.setNtfy(opts.ntfyTopic, opts.ntfyServer);
+    }
+    if (opts.githubToken?.trim()) {
+      store.setGitHubAuth({ token: opts.githubToken.trim() });
     }
 
     const { backend, mode } = await createBackend({
@@ -64,6 +72,16 @@ program
     for (const u of started.urls) console.log(`    ${u}`);
     console.log(`  fingerprint: ${store.data.identity.fingerprint}`);
     console.log(`  pair code:   ${started.pairing.pairCode} (expires ${store.data.pairCodeExpiresAt})`);
+    const github = server.github.status();
+    console.log(
+      `  github:      ${
+        github.mock
+          ? "mock catalog (demo)"
+          : github.connected
+            ? `token${github.login ? ` (${github.login})` : ""}`
+            : "not connected — paste a personal access token from the app"
+      }`,
+    );
     if (store.data.ntfyTopic) {
       console.log(`  ntfy:        ${store.data.ntfyServer ?? "https://ntfy.sh"}/${store.data.ntfyTopic}`);
     }
