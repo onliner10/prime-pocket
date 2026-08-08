@@ -37,6 +37,10 @@ export interface HostCapabilities {
   images: boolean;
   /** Bridge is using a mock/demo adapter instead of a live Prime daemon. */
   demoMode: boolean;
+  /** Host can list/add workspaces (local folders / GitHub worktrees). */
+  workspaces: boolean;
+  /** Host exposes a GitHub catalog (live token/OAuth or mock). */
+  github: boolean;
 }
 
 export interface HostInfo {
@@ -147,11 +151,114 @@ export interface PairResponse {
 
 export interface LaunchAgentRequest {
   cwd?: string;
+  /** Launch into a concrete worktree (preferred). */
+  worktreeId?: WorktreeId;
+  /** Falls back to the newest worktree on this workspace when worktreeId is omitted. */
+  workspaceId?: WorkspaceId;
   name?: string;
   prompt?: string;
   model?: string;
   /** Resume an existing saved session id when supported. */
   resumeId?: string;
+}
+
+/** Opaque workspace id — a linked repository on the bridge. */
+export type WorkspaceId = string;
+
+/** Opaque worktree id — a branch checkout under a workspace. */
+export type WorktreeId = string;
+
+/**
+ * A repository registered on the paired host.
+ * Agents do not run here directly — they run in a Worktree.
+ */
+export interface Workspace {
+  id: WorkspaceId;
+  /** Short display name, e.g. "prime-pocket". */
+  name: string;
+  /** owner/repo when known. */
+  fullName?: string;
+  /** Optional bare/clone root on the host. */
+  repoRoot?: string;
+  defaultBranch?: string;
+  source: "github" | "local";
+  github?: {
+    owner: string;
+    repo: string;
+    private?: boolean;
+    htmlUrl?: string;
+  };
+  addedAt: string;
+  /** Convenience count for list UIs. */
+  worktreeCount?: number;
+}
+
+/** A git worktree (branch + cwd) where an agent can do work. */
+export interface Worktree {
+  id: WorktreeId;
+  workspaceId: WorkspaceId;
+  /** Branch checked out in this worktree. */
+  branch: string;
+  /** Absolute path on the host machine. */
+  cwd: string;
+  /** Short label (often the branch). */
+  name: string;
+  createdAt: string;
+}
+
+export interface GitHubStatus {
+  connected: boolean;
+  /** How GitHub is backed on this host. */
+  mode: "mock" | "token" | "oauth" | "disconnected";
+  /** True when catalog data is synthetic (safe for demos / e2e). */
+  mock: boolean;
+  /** Host can offer a no-credentials mock connect (demo bridges). */
+  mockAvailable?: boolean;
+  login?: string;
+}
+
+export interface GitHubConnectRequest {
+  /** Prefer mock when the host supports it (demos / e2e). */
+  mode?: "mock" | "oauth" | "token";
+  /** Optional PAT when mode is token (live hosts). */
+  token?: string;
+}
+
+export interface GitHubCatalogRepo {
+  id: string;
+  fullName: string;
+  description?: string;
+  private: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
+  /** Language label for list affordance, optional. */
+  language?: string;
+}
+
+export interface GitHubBranch {
+  name: string;
+  protected?: boolean;
+  /** True when this is the repository default branch. */
+  isDefault?: boolean;
+}
+
+export interface AddWorkspaceFromGitHubRequest {
+  fullName: string;
+  /** Optional override for the host-side repo root. */
+  repoRoot?: string;
+}
+
+export interface AddLocalWorkspaceRequest {
+  name: string;
+  /** Local folder that is the repository root on the host. */
+  repoRoot: string;
+}
+
+export interface CreateWorktreeRequest {
+  branch: string;
+  name?: string;
+  /** Optional override; host invents a path under its worktrees dir by default. */
+  cwd?: string;
 }
 
 export interface PromptImage {

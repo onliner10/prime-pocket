@@ -9,10 +9,14 @@ import {
   encodePairingQr,
   sanitizeArtifactFilename,
   validatePromptImages,
+  type AddLocalWorkspaceRequest,
+  type AddWorkspaceFromGitHubRequest,
   type AgentEvent,
   type AgentId,
   type ApiErrorBody,
+  type CreateWorktreeRequest,
   type FollowUpRequest,
+  type GitHubConnectRequest,
   type HostInfo,
   type LaunchAgentRequest,
   type NeedsInputReply,
@@ -23,11 +27,18 @@ import {
   type SteerRequest,
   type StreamClientMessage,
   type StreamServerMessage,
+  type Workspace,
+  type Worktree,
 } from "@prime-pocket/protocol";
+import { randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AgentBackend } from "./backend/types.js";
 import { BridgeStore } from "./store.js";
 import { collectAdvertisedUrls, pickPreferredUrl } from "./network.js";
 import { publishNtfy } from "./ntfy.js";
+import type { GitHubProvider } from "./github.js";
+import { createGitHubProvider } from "./github.js";
 
 export interface BridgeServerOptions {
   store: BridgeStore;
@@ -35,6 +46,8 @@ export interface BridgeServerOptions {
   port: number;
   /** Prefer HTTPS with the store identity cert. Set false only for local tests. */
   tls?: boolean;
+  /** GitHub catalog provider; defaults from demo/env. */
+  github?: GitHubProvider;
 }
 
 function readBody(req: IncomingMessage, maxBytes = MAX_HTTP_BODY_BYTES): Promise<string> {
@@ -62,7 +75,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     "content-length": Buffer.byteLength(data),
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
   });
   res.end(data);
 }
@@ -84,6 +97,7 @@ function bearerToken(req: IncomingMessage, url?: URL): string | undefined {
 export class BridgeServer {
   readonly store: BridgeStore;
   readonly backend: AgentBackend;
+  readonly github: GitHubProvider;
   readonly port: number;
   private readonly tls: boolean;
   private server: HttpsServer | ReturnType<typeof createHttpServer> | null = null;
@@ -97,6 +111,9 @@ export class BridgeServer {
     this.backend = opts.backend;
     this.port = opts.port;
     this.tls = opts.tls !== false;
+    this.github =
+      opts.github ??
+      createGitHubProvider({ mock: Boolean(this.backend.capabilities.demoMode) });
   }
 
   async start(): Promise<{ urls: string[]; pairing: PairingQrPayload; pairingDeepLink: string }> {
@@ -206,7 +223,7 @@ export class BridgeServer {
         res.writeHead(204, {
           "access-control-allow-origin": "*",
           "access-control-allow-headers": "authorization, content-type",
-          "access-control-allow-methods": "GET,POST,OPTIONS",
+          "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
         });
         res.end();
         return;
@@ -256,6 +273,240 @@ export class BridgeServer {
         return;
       }
 
+      if (req.method === "GET" && path === Routes.workspaces) {
+        if (!this.requireAuth(req, res, url)) return;
+        sendJson(res, 200, { workspaces: this.store.listWorkspaces() });
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.workspaces) {
+        if (!this.requireAuth(req, res, url)) return;
+        const body = JSON.parse((await readBody(req)) || "{}") as AddLocalWorkspaceRequest;
+        if (!body.name?.trim() || !body.repoRoot?.trim()) {
+          sendError(res, 400, "name and repoRoot required", "bad_request");
+          return;
+        }
+        const repoRoot = body.repoRoot.trim();
+        const existing = this.store.findWorkspaceByRepoRoot(repoRoot);
+        if (existing) {
+          sendJson(res, 200, { workspace: existing });
+          return;
+        }
+        mkdirSync(repoRoot, { recursive: true });
+        const workspace: Workspace = {
+          id: `ws_${randomBytes(8).toString("hex")}`,
+          name: body.name.trim(),
+          repoRoot,
+          source: "local",
+          addedAt: new Date().toISOString(),
+        };
+        this.store.upsertWorkspace(workspace);
+        sendJson(res, 201, { workspace: this.store.getWorkspace(workspace.id) });
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.workspacesFromGitHub) {
+        if (!this.requireAuth(req, res, url)) return;
+        const body = JSON.parse((await readBody(req)) || "{}") as AddWorkspaceFromGitHubRequest;
+        if (!body.fullName?.trim()) {
+          sendError(res, 400, "fullName required", "bad_request");
+          return;
+        }
+        const fullName = body.fullName.trim();
+        const existing = this.store.findWorkspaceByFullName(fullName);
+        if (existing) {
+          sendJson(res, 200, { workspace: existing });
+          return;
+        }
+        const repo = await this.github.findRepo(fullName);
+        if (!repo) {
+          sendError(res, 404, `GitHub repository not found: ${fullName}`, "not_found");
+          return;
+        }
+        const [owner, repoName] = repo.fullName.split("/");
+        const repoRoot = body.repoRoot?.trim() || this.store.repoRootFor(repo.fullName);
+        mkdirSync(repoRoot, { recursive: true });
+        const workspace: Workspace = {
+          id: `ws_${randomBytes(8).toString("hex")}`,
+          name: repoName || repo.fullName,
+          fullName: repo.fullName,
+          repoRoot,
+          defaultBranch: repo.defaultBranch,
+          source: "github",
+          github: {
+            owner: owner || "",
+            repo: repoName || repo.fullName,
+            private: repo.private,
+            htmlUrl: repo.htmlUrl,
+          },
+          addedAt: new Date().toISOString(),
+        };
+        this.store.upsertWorkspace(workspace);
+        // Repo only — caller creates a worktree next.
+        sendJson(res, 201, { workspace: this.store.getWorkspace(workspace.id) });
+        return;
+      }
+
+      const worktreesMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/worktrees(?:\/([^/]+))?$/);
+      if (worktreesMatch) {
+        if (!this.requireAuth(req, res, url)) return;
+        const workspaceId = decodeURIComponent(worktreesMatch[1]!);
+        const worktreeId = worktreesMatch[2] ? decodeURIComponent(worktreesMatch[2]) : undefined;
+        const workspace = this.store.getWorkspace(workspaceId);
+        if (!workspace) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+
+        if (req.method === "GET" && !worktreeId) {
+          sendJson(res, 200, { worktrees: this.store.listWorktrees(workspaceId) });
+          return;
+        }
+
+        if (req.method === "POST" && !worktreeId) {
+          const body = JSON.parse((await readBody(req)) || "{}") as CreateWorktreeRequest;
+          if (!body.branch?.trim()) {
+            sendError(res, 400, "branch required", "bad_request");
+            return;
+          }
+          const branch = body.branch.trim();
+          const name = (body.name?.trim() || branch).replace(/^\/+/, "");
+          const key = workspace.fullName || workspace.name;
+          const cwd = body.cwd?.trim() || this.store.worktreePathFor(key, branch);
+          const existing = this.store
+            .listWorktrees(workspaceId)
+            .find((t) => t.cwd === cwd || t.branch === branch);
+          if (existing) {
+            sendJson(res, 200, { worktree: existing });
+            return;
+          }
+          mkdirSync(cwd, { recursive: true });
+          // Demo/mock: write a tiny marker so the path looks like a real checkout.
+          try {
+            writeFileSync(
+              join(cwd, ".pocket-worktree.json"),
+              JSON.stringify(
+                {
+                  workspaceId,
+                  fullName: workspace.fullName,
+                  branch,
+                  mock: this.github.status().mock,
+                  createdAt: new Date().toISOString(),
+                },
+                null,
+                2,
+              ),
+            );
+          } catch {
+            // ignore marker failures
+          }
+          const worktree: Worktree = {
+            id: `wt_${randomBytes(8).toString("hex")}`,
+            workspaceId,
+            branch,
+            cwd,
+            name,
+            createdAt: new Date().toISOString(),
+          };
+          this.store.upsertWorktree(worktree);
+          sendJson(res, 201, { worktree });
+          return;
+        }
+
+        if (req.method === "DELETE" && worktreeId) {
+          const wt = this.store.getWorktree(worktreeId);
+          if (!wt || wt.workspaceId !== workspaceId) {
+            sendError(res, 404, "Worktree not found", "not_found");
+            return;
+          }
+          this.store.removeWorktree(worktreeId);
+          sendJson(res, 200, { ok: true });
+          return;
+        }
+      }
+
+      const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)$/);
+      if (workspaceMatch && req.method === "GET") {
+        if (!this.requireAuth(req, res, url)) return;
+        const id = decodeURIComponent(workspaceMatch[1]!);
+        const workspace = this.store.getWorkspace(id);
+        if (!workspace) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+        sendJson(res, 200, {
+          workspace,
+          worktrees: this.store.listWorktrees(id),
+        });
+        return;
+      }
+
+      if (workspaceMatch && req.method === "DELETE") {
+        if (!this.requireAuth(req, res, url)) return;
+        const id = decodeURIComponent(workspaceMatch[1]!);
+        const ok = this.store.removeWorkspace(id);
+        if (!ok) {
+          sendError(res, 404, "Workspace not found", "not_found");
+          return;
+        }
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === "GET" && path === Routes.githubStatus) {
+        if (!this.requireAuth(req, res, url)) return;
+        sendJson(res, 200, this.github.status());
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.githubConnect) {
+        if (!this.requireAuth(req, res, url)) return;
+        try {
+          const body = JSON.parse((await readBody(req)) || "{}") as GitHubConnectRequest;
+          const status = await this.github.connect(body);
+          sendJson(res, 200, status);
+        } catch (e) {
+          sendError(res, 400, e instanceof Error ? e.message : String(e), "github_unavailable");
+        }
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.githubDisconnect) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = await this.github.disconnect();
+        sendJson(res, 200, status);
+        return;
+      }
+
+      if (req.method === "GET" && path === Routes.githubRepos) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = this.github.status();
+        if (!status.connected) {
+          sendError(res, 401, "GitHub not connected on this host", "github_disconnected");
+          return;
+        }
+        const q = url.searchParams.get("q") ?? undefined;
+        const repos = await this.github.listRepos(q);
+        sendJson(res, 200, { repos, status });
+        return;
+      }
+
+      const branchMatch = path.match(/^\/v1\/github\/repos\/([^/]+)\/([^/]+)\/branches$/);
+      if (req.method === "GET" && branchMatch) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = this.github.status();
+        if (!status.connected) {
+          sendError(res, 401, "GitHub not connected on this host", "github_disconnected");
+          return;
+        }
+        const owner = decodeURIComponent(branchMatch[1]!);
+        const repo = decodeURIComponent(branchMatch[2]!);
+        const fullName = `${owner}/${repo}`;
+        const branches = await this.github.listBranches(fullName);
+        sendJson(res, 200, { branches, fullName });
+        return;
+      }
+
       if (req.method === "GET" && path === Routes.agents) {
         if (!this.requireAuth(req, res, url)) return;
         const agents = await this.backend.listAgents();
@@ -266,7 +517,33 @@ export class BridgeServer {
       if (req.method === "POST" && path === Routes.agents) {
         if (!this.requireAuth(req, res, url)) return;
         const body = JSON.parse((await readBody(req)) || "{}") as LaunchAgentRequest;
-        const agent = await this.backend.launch(body);
+        let launchReq = body;
+        if (body.worktreeId) {
+          const wt = this.store.getWorktree(body.worktreeId);
+          if (!wt) {
+            sendError(res, 404, "Worktree not found", "not_found");
+            return;
+          }
+          launchReq = { ...body, cwd: body.cwd ?? wt.cwd, workspaceId: wt.workspaceId };
+        } else if (body.workspaceId) {
+          const ws = this.store.getWorkspace(body.workspaceId);
+          if (!ws) {
+            sendError(res, 404, "Workspace not found", "not_found");
+            return;
+          }
+          const latest = this.store.listWorktrees(ws.id)[0];
+          if (!latest) {
+            sendError(
+              res,
+              400,
+              "Create a worktree in this workspace before launching an agent",
+              "worktree_required",
+            );
+            return;
+          }
+          launchReq = { ...body, cwd: body.cwd ?? latest.cwd, worktreeId: latest.id };
+        }
+        const agent = await this.backend.launch(launchReq);
         sendJson(res, 201, { agent });
         return;
       }

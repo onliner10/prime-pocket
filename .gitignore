@@ -13,3 +13,5 @@ apps/mobile/.expo/
 apps/mobile/dist/
 apps/mobile/test-results/
 apps/mobile/playwright-report/
+# Tamagui compiler cache — a multi-megabyte dump of the resolved config.
+apps/mobile/.tamagui/

@@ -1,16 +1,29 @@
+import type { ComponentType } from "react";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import type { IconProps } from "@tamagui/helpers-icon";
+import { Bell, CheckCircle2, ChevronLeft, Radio, Search, Sparkles } from "@tamagui/lucide-icons-2";
+import { H1, SizableText, Tabs, useTheme, XStack } from "tamagui";
 import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
 import { listFleetAgents } from "../../src/api";
 import { loadPairedHosts } from "../../src/storage";
-import { filterAgents, statusAccent, statusLabel, type InboxFilter } from "../../src/inbox";
-import { colors, proofSafeArea, radii, shadows, space, type } from "../../src/theme";
-import { CircleButton } from "../../src/components/CircleButton";
-import { Icon, type IconName } from "../../src/components/Icon";
+import { filterAgents, statusLabel, statusTheme, type InboxFilter } from "../../src/inbox";
 import { ComposerDock } from "../../src/components/ComposerDock";
 import { PillComposer } from "../../src/components/PillComposer";
+import {
+  AppHeader,
+  ConnectionNotice,
+  EmptyState,
+  GUTTER,
+  Gutter,
+  IconButton,
+  Meta,
+  Screen,
+  StatusDot,
+  Surface,
+  useSafeBottom,
+} from "../../src/ui";
 
 const TITLES: Record<InboxFilter, string> = {
   all: "All Agents",
@@ -19,37 +32,50 @@ const TITLES: Record<InboxFilter, string> = {
   in_review: "In Review",
 };
 
-const EMPTY: Record<InboxFilter, { title: string; body: string; icon: IconName; accent: string }> = {
+/** Short forms — the full titles do not fit four across at 390pt. */
+const TABS: Record<InboxFilter, string> = {
+  all: "All",
+  working: "Working",
+  needs_attention: "Attention",
+  in_review: "Review",
+};
+
+const FILTER_ORDER: InboxFilter[] = ["all", "working", "needs_attention", "in_review"];
+
+const EMPTY: Record<
+  InboxFilter,
+  { title: string; body: string; icon: ComponentType<IconProps>; theme: string }
+> = {
   all: {
     title: "No Agents Yet",
-    body: "Pair a workspace and launch an agent to see it here.",
-    icon: "converge",
-    accent: colors.allAgents,
+    body: "Pair a host, add a repository, and launch an agent to see it here.",
+    icon: Sparkles,
+    theme: "agents",
   },
   working: {
     title: "Nothing Working",
     body: "Agents currently running appear here.",
-    icon: "crosshair",
-    accent: colors.working,
+    icon: Radio,
+    theme: "working",
   },
   needs_attention: {
     title: "Nothing Needs Attention",
     body: "Agents waiting on your response or review appear here.",
-    icon: "bell",
-    accent: colors.needsAttention,
+    icon: Bell,
+    theme: "attention",
   },
   in_review: {
     title: "Nothing In Review",
     body: "Idle agents ready for you to review appear here.",
-    icon: "checkCircle",
-    accent: colors.inReview,
+    icon: CheckCircle2,
+    theme: "review",
   },
 };
 
 export default function AgentsFilterScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const bottomInset = insets.bottom + proofSafeArea.bottom;
+  const theme = useTheme();
+  const bottomInset = useSafeBottom();
   const params = useLocalSearchParams<{ filter?: string }>();
   const raw = (params.filter ?? "all") as InboxFilter;
   const filter: InboxFilter = raw in TITLES ? raw : "all";
@@ -73,7 +99,11 @@ export default function AgentsFilterScreen() {
     }
     const result = await listFleetAgents(paired);
     setAgents(result.agents);
-    setConnectionError(result.errors.length ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable` : null);
+    setConnectionError(
+      result.errors.length
+        ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable`
+        : null,
+    );
     setLoading(false);
   }, []);
 
@@ -87,41 +117,82 @@ export default function AgentsFilterScreen() {
   const empty = EMPTY[filter];
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <View style={styles.topBar}>
-        <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
-        </CircleButton>
-        <View style={styles.topRight}>
-          <CircleButton accessibilityLabel="Search">
-            <Icon name="search" size={19} color={colors.ink} strokeWidth={1.9} />
-          </CircleButton>
-          <CircleButton accessibilityLabel="Filter">
-            <Icon name="filter" size={19} color={colors.ink} strokeWidth={1.9} />
-          </CircleButton>
-        </View>
-      </View>
+    <Screen>
+      <AppHeader>
+        <IconButton
+          aria-label="Back"
+          icon={<ChevronLeft size={19} strokeWidth={2} />}
+          onPress={() => router.back()}
+        />
+        <IconButton aria-label="Search" icon={<Search size={19} strokeWidth={1.9} />} />
+      </AppHeader>
 
-      <View style={styles.heading}>
-        <Text style={styles.title}>{title}</Text>
+      <Gutter mt={22} mb={14}>
+        <H1 fontSize="$10" fontWeight="500" color="$color">
+          {title}
+        </H1>
         {filtered.length > 0 ? (
-          <Text style={styles.subtitle}>
+          <Meta mt={3}>
             {filtered.length} {filtered.length === 1 ? "agent" : "agents"}
-          </Text>
+          </Meta>
         ) : null}
-      </View>
+      </Gutter>
+
+      <Gutter mb={14}>
+        <Tabs
+          value={filter}
+          onValueChange={(next) =>
+            router.replace({ pathname: "/agents/[filter]", params: { filter: next } })
+          }
+          orientation="horizontal"
+          flexDirection="column"
+        >
+          {/* $color2 is the page background, so the track needs $color3 to read
+              as recessed rather than as a pill floating on nothing. */}
+          <Tabs.List unstyled bg="$color3" rounded={999} p={3}>
+            {FILTER_ORDER.map((key) => {
+              const active = key === filter;
+              return (
+                <Tabs.Tab
+                  key={key}
+                  unstyled
+                  value={key}
+                  aria-label={`Show ${TITLES[key]}`}
+                  flex={1}
+                  height={34}
+                  // Group zeroes the inner radii to weld segments together; each
+                  // tab here is its own pill riding inside the track instead.
+                  rounded={999}
+                  items="center"
+                  justify="center"
+                  cursor="pointer"
+                  transition="quick"
+                  bg={active ? "$color1" : "transparent"}
+                  shadowColor="$shadowColor"
+                  shadowOpacity={active ? 1 : 0}
+                  shadowRadius={4}
+                  shadowOffset={{ width: 0, height: 1 }}
+                  hoverStyle={{ bg: active ? "$color1" : "$color4" }}
+                  pressStyle={{ opacity: 0.7 }}
+                >
+                  <SizableText
+                    fontSize="$3"
+                    fontWeight={active ? "600" : "400"}
+                    color={active ? "$color12" : "$color10"}
+                  >
+                    {TABS[key]}
+                  </SizableText>
+                </Tabs.Tab>
+              );
+            })}
+          </Tabs.List>
+        </Tabs>
+      </Gutter>
 
       {connectionError ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open workspaces to reconnect"
-          style={({ pressed }) => [styles.connectionNotice, pressed && styles.pressed]}
-          onPress={() => router.push("/hosts")}
-        >
-          <View style={styles.connectionDot} />
-          <Text style={styles.connectionText}>{connectionError}. Tap to reconnect.</Text>
-          <Icon name="chevronRight" size={16} color={colors.muted2} strokeWidth={2.1} />
-        </Pressable>
+        <Gutter mb={10}>
+          <ConnectionNotice message={connectionError} onPress={() => router.push("/hosts")} />
+        </Gutter>
       ) : null}
 
       <FlatList
@@ -132,47 +203,34 @@ export default function AgentsFilterScreen() {
           <RefreshControl
             refreshing={loading}
             onRefresh={() => void refresh()}
-            tintColor={colors.muted}
+            tintColor={theme.color9.val}
           />
         }
-        contentContainerStyle={filtered.length === 0 ? [styles.emptyWrap, { paddingBottom: 115 + bottomInset }] : [styles.list, { paddingBottom: 130 + bottomInset }]}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{empty.title}</Text>
-            <Text style={styles.emptyBody}>{empty.body}</Text>
-          </View>
+        contentContainerStyle={
+          filtered.length === 0
+            ? { flexGrow: 1, justifyContent: "center", paddingBottom: 115 + bottomInset }
+            : { paddingHorizontal: GUTTER, gap: 10, paddingBottom: 130 + bottomInset }
         }
-        renderItem={({ item }) => {
-          const host = hosts.find((h) => h.hostId === item.hostId)?.label ?? "Workspace";
-          const accent = statusAccent(item.status);
-          return (
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              onPress={() =>
-                router.push({
-                  pathname: "/agent/[hostId]/[agentId]",
-                  params: { hostId: item.hostId, agentId: item.id },
-                })
-              }
-            >
-              <View style={styles.rowTop}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <View style={styles.badge}>
-                  <View style={[styles.dot, { backgroundColor: accent }]} />
-                  <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
-                </View>
-              </View>
-              <Text style={styles.meta}>{host}</Text>
-              {item.preview ? (
-                <Text style={styles.preview} numberOfLines={2}>
-                  {item.preview}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        }}
+        ListEmptyComponent={
+          <EmptyState
+            title={empty.title}
+            body={empty.body}
+            icon={empty.icon}
+            theme={empty.theme}
+          />
+        }
+        renderItem={({ item }) => (
+          <AgentRow
+            agent={item}
+            hostLabel={hosts.find((h) => h.hostId === item.hostId)?.label ?? "Workspace"}
+            onPress={() =>
+              router.push({
+                pathname: "/agent/[hostId]/[agentId]",
+                params: { hostId: item.hostId, agentId: item.id },
+              })
+            }
+          />
+        )}
       />
 
       <ComposerDock restingBottom={Math.max(14, bottomInset + 10)}>
@@ -186,56 +244,49 @@ export default function AgentsFilterScreen() {
           placeholder="Plan, ask, build..."
         />
       </ComposerDock>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
-  topBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: space.gutter,
-    marginTop: 6,
-  },
-  topRight: { flexDirection: "row", gap: 10 },
-  heading: { paddingHorizontal: space.gutter, marginTop: 22, marginBottom: 16 },
-  title: type.display,
-  subtitle: { ...type.meta, marginTop: 3 },
-  connectionNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    marginHorizontal: space.gutter,
-    marginBottom: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radii.row,
-    backgroundColor: "#FFF4EA",
-  },
-  connectionDot: { width: 7, height: 7, borderRadius: radii.circle, backgroundColor: colors.needsAttention },
-  connectionText: { ...type.meta, color: colors.ink2, flex: 1 },
-  list: { paddingHorizontal: space.gutter, gap: 10 },
-  emptyWrap: { flexGrow: 1, justifyContent: "center" },
-  empty: { alignItems: "center", paddingHorizontal: 30 },
-  emptyTitle: { ...type.body, color: colors.muted, fontSize: 19, lineHeight: 25, textAlign: "center" },
-  emptyBody: { ...type.body, color: colors.muted, fontSize: 17, lineHeight: 24, textAlign: "center", marginTop: 5 },
-  row: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    ...shadows.row,
-  },
-  pressed: { opacity: 0.7 },
-  rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  rowTitle: { ...type.cardLabel, flex: 1, fontSize: 16, letterSpacing: -0.3 },
-  badge: { flexDirection: "row", alignItems: "center", gap: 6 },
-  dot: { width: 7, height: 7, borderRadius: radii.circle },
-  badgeText: { ...type.meta, fontSize: 12 },
-  meta: { ...type.meta, fontSize: 12, fontWeight: "400", marginTop: 3 },
-  preview: { ...type.bodySmall, color: colors.ink2, marginTop: 8 },
-});
+/** Agent card: name + status pip, host, and the latest transcript line. */
+function AgentRow({
+  agent,
+  hostLabel,
+  onPress,
+}: {
+  agent: AgentSummary;
+  hostLabel: string;
+  onPress: () => void;
+}) {
+  return (
+    <Surface
+      role="button"
+      aria-label={`${agent.name}, ${statusLabel(agent.status)}`}
+      onPress={onPress}
+      px={16}
+      py={15}
+      cursor="pointer"
+      transition="quicker"
+      pressStyle={{ opacity: 0.7, scale: 0.995 }}
+      enterStyle={{ opacity: 0, y: 8 }}
+    >
+      <XStack items="center" justify="space-between" gap={10}>
+        <SizableText flex={1} fontSize="$5" color="$color" numberOfLines={1}>
+          {agent.name}
+        </SizableText>
+        <XStack items="center" gap={6}>
+          <StatusDot theme={statusTheme(agent.status) ?? null} />
+          <Meta fontSize="$2">{statusLabel(agent.status)}</Meta>
+        </XStack>
+      </XStack>
+      <Meta fontSize="$2" fontWeight="400" mt={3}>
+        {hostLabel}
+      </Meta>
+      {agent.preview ? (
+        <SizableText fontSize="$4" color="$color10" mt={8} numberOfLines={2}>
+          {agent.preview}
+        </SizableText>
+      ) : null}
+    </Surface>
+  );
+}

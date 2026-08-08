@@ -1,17 +1,28 @@
 import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ChevronLeft, ChevronRight, Github, Plus } from "@tamagui/lucide-icons-2";
+import { useToastController } from "@tamagui/toast";
+import { ScrollView, SizableText, XStack, YStack } from "tamagui";
 import type { PairedHost } from "@prime-pocket/protocol";
 import { loadPairedHosts, removePairedHost, upsertPairedHost } from "../src/storage";
 import { reconnectPairedHost } from "../src/api";
-import { colors, fonts, proofSafeArea, radii, shadows, space, type } from "../src/theme";
-import { CircleButton } from "../src/components/CircleButton";
-import { Icon } from "../src/components/Icon";
 import { WorkspaceRow } from "../src/components/WorkspaceRow";
+import {
+  AppHeader,
+  ChipButton,
+  GUTTER,
+  Gutter,
+  HeaderTitle,
+  IconButton,
+  Lead,
+  Mono,
+  Screen,
+  Surface,
+} from "../src/ui";
 
 export default function HostsScreen() {
   const router = useRouter();
+  const toast = useToastController();
   const [hosts, setHosts] = useState<PairedHost[]>([]);
 
   useFocusEffect(
@@ -25,90 +36,100 @@ export default function HostsScreen() {
       const next = await reconnectPairedHost(host);
       await upsertPairedHost(next);
       setHosts(await loadPairedHosts());
+      toast.show("Reconnected", { message: next.label, customData: { theme: "success" } });
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      toast.show("Could not reconnect", {
+        message: e instanceof Error ? e.message : String(e),
+        customData: { theme: "danger" },
+      });
     }
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.topBar}>
-        <CircleButton accessibilityLabel="Back" onPress={() => router.back()}>
-          <Icon name="chevronLeft" size={19} color={colors.ink} strokeWidth={2} />
-        </CircleButton>
-        <Text style={styles.title}>Workspaces</Text>
-        <CircleButton accessibilityLabel="Pair" onPress={() => router.push("/pair")}>
-          <Icon name="folderPlus" size={19} color={colors.ink} strokeWidth={1.75} />
-        </CircleButton>
-      </View>
-      <Text style={styles.help}>
-        Hosts are stored on-device. Remote access uses Tailscale or LAN — Pocket does not run a relay.
-      </Text>
-      <FlatList
-        data={hosts}
-        keyExtractor={(h) => h.hostId}
-        contentContainerStyle={styles.list}
+    <Screen>
+      <AppHeader>
+        <IconButton
+          aria-label="Back"
+          icon={<ChevronLeft size={19} strokeWidth={2} />}
+          onPress={() => router.back()}
+        />
+        <HeaderTitle>Hosts</HeaderTitle>
+        <IconButton
+          aria-label="Pair host"
+          icon={<Plus size={19} strokeWidth={1.75} />}
+          onPress={() => router.push("/pair")}
+        />
+      </AppHeader>
+
+      <Gutter pt={14}>
+        <Lead color="$color9">
+          Paired bridges are stored on-device. Each host can expose many GitHub/local repositories
+          as workspaces. Remote access uses Tailscale or LAN — Pocket does not run a relay.
+        </Lead>
+
+        <Surface
+          mt={14}
+          role="button"
+          aria-label="Connect GitHub"
+          onPress={() => router.push("/github")}
+          flexDirection="row"
+          items="center"
+          gap={10}
+          px={14}
+          py={13}
+          cursor="pointer"
+          transition="quicker"
+          pressStyle={{ bg: "$color2" }}
+        >
+          <Github size={18} color="$color" strokeWidth={1.7} />
+          <SizableText grow={1} fontSize="$5" fontWeight="500" color="$color">
+            Connect GitHub
+          </SizableText>
+          <ChevronRight size={16} color="$color7" strokeWidth={2.1} />
+        </Surface>
+      </Gutter>
+
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<Text style={styles.empty}>No paired hosts.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <WorkspaceRow name={item.label} variant="plain" />
-            <Text style={styles.meta}>{item.baseUrl}</Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              fp {item.fingerprint.slice(0, 16)}…
-            </Text>
-            <View style={styles.row}>
-              <Pressable style={styles.btn} onPress={() => void reconnect(item)}>
-                <Text style={styles.btnText}>Reconnect</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.btn, styles.danger]}
-                onPress={() => void removePairedHost(item.hostId).then(setHosts)}
-              >
-                <Text style={styles.btnText}>Remove</Text>
-              </Pressable>
-            </View>
-          </View>
+        contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: 40 }}
+      >
+        {hosts.length === 0 ? (
+          <SizableText mt={40} text="center" fontSize="$5" color="$color9">
+            No paired hosts.
+          </SizableText>
+        ) : (
+          hosts.map((host) => (
+            <Surface key={host.hostId} p={14} mt={12} enterStyle={{ opacity: 0, y: 8 }}>
+              <WorkspaceRow name={host.label} variant="plain" />
+              <YStack px={4} pt={3} gap={3}>
+                <Mono fontSize="$1">{host.baseUrl}</Mono>
+                <Mono fontSize="$1" numberOfLines={1}>
+                  fp {host.fingerprint.slice(0, 16)}…
+                </Mono>
+              </YStack>
+              <XStack gap={8} mt={14}>
+                <ChipButton
+                  role="button"
+                  aria-label={`Reconnect ${host.label}`}
+                  onPress={() => void reconnect(host)}
+                >
+                  Reconnect
+                </ChipButton>
+                <ChipButton
+                  theme="danger"
+                  bg="$color3"
+                  color="$color11"
+                  role="button"
+                  aria-label={`Remove ${host.label}`}
+                  onPress={() => void removePairedHost(host.hostId).then(setHosts)}
+                >
+                  Remove
+                </ChipButton>
+              </XStack>
+            </Surface>
+          ))
         )}
-      />
-    </SafeAreaView>
+      </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: space.gutter,
-    marginTop: 6,
-  },
-  title: type.navTitle,
-  help: { ...type.body, color: colors.muted, paddingHorizontal: space.gutter, paddingTop: 14 },
-  list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  empty: { ...type.body, color: colors.muted, textAlign: "center", marginTop: 40 },
-  card: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.card,
-    padding: 14,
-    marginTop: 12,
-    ...shadows.row,
-  },
-  meta: {
-    fontFamily: fonts.mono,
-    color: colors.muted,
-    marginTop: 3,
-    fontSize: 11,
-    paddingHorizontal: 4,
-  },
-  row: { flexDirection: "row", gap: 8, marginTop: 14 },
-  btn: {
-    backgroundColor: colors.chip,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: radii.pill,
-  },
-  danger: { backgroundColor: "#FFEBEA" },
-  btnText: type.pill,
-});

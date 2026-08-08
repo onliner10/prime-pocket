@@ -1,54 +1,50 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radii, shadows, type } from "../theme";
-import { Icon, type IconName } from "./Icon";
+import type { ComponentType } from "react";
+import type { IconProps } from "@tamagui/helpers-icon";
+import { SizableText } from "tamagui";
+import { Surface } from "../ui";
 
+/**
+ * One inbox filter tile. The status theme tints the whole card — surface,
+ * border, icon and count all come from `theme`, so a new status needs a theme
+ * entry and nothing else.
+ */
 export function StatusCard({
   title,
   count,
-  icon,
-  accent,
+  icon: Icon,
+  theme,
   onPress,
 }: {
   title: string;
   count?: number | string;
-  icon: IconName;
-  accent: string;
+  icon: ComponentType<IconProps>;
+  theme: "agents" | "working" | "attention" | "review";
   onPress?: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={count === undefined ? title : `${title} ${count}`}
+    <Surface
+      theme={theme}
+      role="button"
+      aria-label={count === undefined ? title : `${title} ${count}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      flex={1}
+      minH={108}
+      px={12}
+      pt={15}
+      pb={16}
+      justify="space-between"
+      borderColor="$color4"
+      cursor="pointer"
+      transition="quicker"
+      hoverStyle={{ borderColor: "$color6" }}
+      pressStyle={{ scale: 0.975, bg: "$color2" }}
+      enterStyle={{ opacity: 0, y: 10 }}
     >
-      <View style={styles.iconRow}>
-        <Icon name={icon} size={25} color={accent} strokeWidth={2} />
-      </View>
-      <Text style={styles.title} numberOfLines={2}>
+      <Icon size={25} color="$color9" strokeWidth={2} />
+      <SizableText fontSize="$6" color="$color12" numberOfLines={2}>
         {title}
-        {count !== undefined ? <Text style={styles.count}> {count}</Text> : null}
-      </Text>
-    </Pressable>
+        {count === undefined ? null : <SizableText color="$color9"> {count}</SizableText>}
+      </SizableText>
+    </Surface>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    flex: 1,
-    minHeight: 108,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    paddingHorizontal: 12,
-    paddingTop: 15,
-    paddingBottom: 16,
-    justifyContent: "space-between",
-    ...shadows.card,
-  },
-  pressed: { opacity: 0.7 },
-  iconRow: { height: 25, justifyContent: "center" },
-  title: { ...type.cardLabel, fontSize: 17, lineHeight: 21, fontWeight: "400", letterSpacing: -0.4, marginTop: 22 },
-  count: { color: colors.muted, fontWeight: "400" },
-});

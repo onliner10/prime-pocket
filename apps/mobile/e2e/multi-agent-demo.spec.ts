@@ -37,12 +37,31 @@ async function clearApp(page: import("@playwright/test").Page) {
   await page.reload({ waitUntil: "networkidle" });
 }
 
-async function pairViaUi(page: import("@playwright/test").Page, pairCode: string) {
-  await page.getByLabel("Pair host").first().click();
+async function onboardAndPair(page: import("@playwright/test").Page, pairCode: string) {
+  await expect(page.getByText("Get set up").first()).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: "Pair host" }).click();
+  await expect(page.getByPlaceholder("http://127.0.0.1:17420")).toBeVisible({ timeout: 10000 });
   await page.getByPlaceholder("http://127.0.0.1:17420").fill(BRIDGE);
   await page.getByPlaceholder("pair code").fill(pairCode);
   await page.getByText("Pair manually", { exact: true }).click();
-  await expect(page.getByText("ui-test").first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("button", { name: "Use mock GitHub" })).toBeVisible({
+    timeout: 20000,
+  });
+  await page.getByRole("button", { name: "Use mock GitHub" }).click();
+  await expect(page.getByText(/Signed in as pocket-demo/i).first()).toBeVisible({
+    timeout: 15000,
+  });
+  await page.getByRole("button", { name: "Finish setup" }).click();
+}
+
+async function addMockRepo(page: import("@playwright/test").Page, fullName = "acme/checkout-web") {
+  await expect(page.getByText("Add repository").first()).toBeVisible({ timeout: 15000 });
+  await page.getByLabel(`Add ${fullName}`).click();
+  await expect(page.getByText("New worktree").first()).toBeVisible({ timeout: 20000 });
+  await page.getByLabel("Branch dropdown").click();
+  await page.getByLabel("Branch feat/hello-world").click();
+  await page.getByLabel("Create worktree").click();
+  await expect(page.getByText(fullName).first()).toBeVisible({ timeout: 20000 });
 }
 
 async function waitForAssistantIdle(page: import("@playwright/test").Page) {
@@ -81,10 +100,11 @@ test.describe("Multi-agent conversation demo video", () => {
     test.setTimeout(180_000);
 
     await clearApp(page);
-    await expect(page.getByText("Inbox").first()).toBeVisible({ timeout: 20000 });
-    await page.waitForTimeout(900);
+    await expect(page.getByText("Get set up").first()).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(600);
 
-    await pairViaUi(page, currentPairCode());
+    await onboardAndPair(page, currentPairCode());
+    await addMockRepo(page);
     await page.waitForTimeout(1000);
 
     // --- Agent 1 ---

@@ -93,6 +93,8 @@ Features in v1:
 
 - Pair host (deep link / manual URL + code)
 - Multi-host fleet list
+- Workspaces = repositories/worktrees on a paired host (not the host itself)
+- Add repository from GitHub catalog (mock in `--demo`) or local folder path
 - Agent transcript with live WebSocket stream
 - Prompt / steer / follow-up / cancel
 - Needs-input approve/deny
@@ -104,6 +106,8 @@ Auth: `Authorization: Bearer <token>` (or `?token=` for WS/artifact opens).
 
 - `GET /v1/host`
 - `POST /v1/pair` — `{ pairCode, deviceLabel }`
+- `GET /v1/workspaces` / `POST /v1/workspaces` / `POST /v1/workspaces/from-github` / `DELETE /v1/workspaces/:id`
+- `GET /v1/github/status` / `GET /v1/github/repos` / `POST /v1/github/connect` (mock in demo)
 - `GET /v1/agents` / `POST /v1/agents`
 - `GET /v1/agents/:id`
 - `POST /v1/agents/:id/prompt|steer|follow-up|cancel|needs-input`

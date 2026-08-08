@@ -1,14 +1,16 @@
+// Expo auto-configures monorepo watchFolders / nodeModulesPaths for SDK 52+.
+// Keep this file minimal so Expo defaults stay intact.
 const { getDefaultConfig } = require("expo/metro-config");
-const path = require("path");
+const { withTamagui } = require("@tamagui/metro-plugin");
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, "../..");
+// Tamagui ships its atomic styles as CSS on web.
+const config = getDefaultConfig(__dirname, { isCSSEnabled: true });
 
-const config = getDefaultConfig(projectRoot);
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(workspaceRoot, "node_modules"),
-];
+// Every @tamagui/* package picks its platform build purely from the "exports"
+// map (react-native vs browser) — there is no runtime platform flag to fall
+// back on. Default-on in SDK 54, pinned here so a Metro default flip cannot
+// silently ship the web build to native.
+config.resolver.unstable_enablePackageExports = true;
 
-module.exports = config;
+// Resolves .css and validates the compiler options; reads tamagui.build.ts.
+module.exports = withTamagui(config);
