@@ -677,9 +677,19 @@ export function githubTokenFromEnv(env = process.env): string | undefined {
   return env.PRIME_POCKET_GITHUB_TOKEN?.trim() || env.GITHUB_TOKEN?.trim() || undefined;
 }
 
-/** Public OAuth App client id (device flow). Not a secret. */
-export function githubOAuthClientIdFromEnv(env = process.env): string | undefined {
-  return env.PRIME_POCKET_GITHUB_CLIENT_ID?.trim() || env.GITHUB_CLIENT_ID?.trim() || undefined;
+/**
+ * Public OAuth App client id for device flow (not a secret).
+ * Shipped default belongs to the Prime Pocket OAuth App; override via env/CLI for forks / GHES.
+ */
+export const DEFAULT_GITHUB_OAUTH_CLIENT_ID = "Ov23liEONjONQi7z0Uvt";
+
+/** Resolve OAuth client id: explicit env → shipped default. */
+export function githubOAuthClientIdFromEnv(env = process.env): string {
+  return (
+    env.PRIME_POCKET_GITHUB_CLIENT_ID?.trim() ||
+    env.GITHUB_CLIENT_ID?.trim() ||
+    DEFAULT_GITHUB_OAUTH_CLIENT_ID
+  );
 }
 
 export function createGitHubProvider(opts: {

@@ -32,7 +32,7 @@ program
   )
   .option(
     "--github-client-id <id>",
-    "GitHub OAuth App client id for browser/device login (or set PRIME_POCKET_GITHUB_CLIENT_ID)",
+    "Override GitHub OAuth App client id (default: shipped Prime Pocket app)",
   )
   .action(async (opts: {
     port: string;

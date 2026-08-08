@@ -318,9 +318,9 @@ export default function GitHubConnectScreen() {
                     ? "This host supports mock GitHub for demos — no credentials needed."
                     : oauthPending
                       ? "Finish signing in on github.com, then return here. The bridge waits for authorization."
-                      : status.oauthAvailable
+                        : status.oauthAvailable
                         ? `Sign in with GitHub in the browser. The token stays on ${host.label}.`
-                        : `Browser login is not configured on ${host.label}. Paste a personal access token, or set PRIME_POCKET_GITHUB_CLIENT_ID on the host.`}
+                        : `Paste a personal access token. It stays on ${host.label} — the app never keeps a copy.`}
                 </Text>
               </View>
             </View>

@@ -10,6 +10,7 @@ export {
   createGitHubProvider,
   githubTokenFromEnv,
   githubOAuthClientIdFromEnv,
+  DEFAULT_GITHUB_OAUTH_CLIENT_ID,
   type GitHubProvider,
 } from "./github.js";
 export * from "./network.js";

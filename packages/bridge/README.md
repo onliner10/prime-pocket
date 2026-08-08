@@ -12,12 +12,13 @@ State lives in `~/.prime-pocket/` (`bridge.json`, `artifacts/`), or `PRIME_POCKE
 
 ## GitHub
 
-Live hosts prefer **browser login** via GitHub’s device flow (OAuth App + Device Flow enabled).
-Give the bridge the public client id:
+Live hosts prefer **browser login** via GitHub’s device flow. A public OAuth App client id is
+shipped in the bridge, so you do not need to pass `--github-client-id` for the default app.
 
 ```bash
-node packages/bridge/dist/cli.js bridge --http --github-client-id Ov23li…
-# or PRIME_POCKET_GITHUB_CLIENT_ID=Ov23li…
+node packages/bridge/dist/cli.js bridge --http
+# optional override:
+# node packages/bridge/dist/cli.js bridge --http --github-client-id Ov23li…
 ```
 
 The phone starts the flow; you enter a one-time code on github.com; the bridge polls and stores

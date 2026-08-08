@@ -81,9 +81,11 @@ stays on that machine. Paste a personal access token only as a fallback.
 
 ### Browser login (recommended)
 
-1. Create a [GitHub OAuth App](https://github.com/settings/applications/new) (any homepage/callback URL is fine for device flow).
-2. Enable **Device Flow** on the app settings page.
-3. Give the bridge the public client id (not a secret):
+Prime Pocket ships with a public GitHub OAuth App client id, so browser login works out of the
+box. In the app: **Connect GitHub → Continue with GitHub**, enter the one-time code on github.com;
+the bridge polls until authorized.
+
+To use a different OAuth App (forks / GHES), override the public client id:
 
 ```bash
 prime-pocket bridge --github-client-id Ov23li…
@@ -91,9 +93,7 @@ prime-pocket bridge --github-client-id Ov23li…
 PRIME_POCKET_GITHUB_CLIENT_ID=Ov23li… prime-pocket bridge
 ```
 
-4. In the app: **Connect GitHub → Continue with GitHub**. Enter the one-time code on github.com; the bridge polls until authorized.
-
-Scopes requested: `repo read:user`.
+Scopes requested: `repo read:user`. Device flow does not use a client secret.
 
 ### Personal access token (fallback)
 

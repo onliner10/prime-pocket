@@ -8,10 +8,12 @@ import { BridgeStore } from "./store.js";
 import { BridgeServer } from "./server.js";
 import { DemoBackend } from "./backend/demo.js";
 import {
+  DEFAULT_GITHUB_OAUTH_CLIENT_ID,
   GitHubApiError,
   MockGitHubProvider,
   TokenGitHubProvider,
   createGitHubProvider,
+  githubOAuthClientIdFromEnv,
 } from "./github.js";
 
 async function freePort(): Promise<number> {
@@ -236,6 +238,22 @@ describe("TokenGitHubProvider", () => {
       },
     );
     assert.equal(provider.status().oauthAvailable, false);
+  });
+
+  it("defaults to the shipped OAuth client id so browser login works without flags", () => {
+    const previous = process.env.PRIME_POCKET_GITHUB_CLIENT_ID;
+    const previousGh = process.env.GITHUB_CLIENT_ID;
+    delete process.env.PRIME_POCKET_GITHUB_CLIENT_ID;
+    delete process.env.GITHUB_CLIENT_ID;
+    try {
+      const provider = createGitHubProvider({ mock: false });
+      assert.ok(provider instanceof TokenGitHubProvider);
+      assert.equal(provider.status().oauthAvailable, true);
+      assert.equal(githubOAuthClientIdFromEnv(), DEFAULT_GITHUB_OAUTH_CLIENT_ID);
+    } finally {
+      if (previous !== undefined) process.env.PRIME_POCKET_GITHUB_CLIENT_ID = previous;
+      if (previousGh !== undefined) process.env.GITHUB_CLIENT_ID = previousGh;
+    }
   });
 
   it("runs GitHub device-flow OAuth and stores the access token", async () => {
