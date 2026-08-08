@@ -1,4 +1,4 @@
-import { Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, radii, shadows, type } from "../theme";
 import { Icon } from "./Icon";
 
@@ -11,9 +11,11 @@ export type PendingImage = {
 };
 
 /**
- * Cursor-like composer. Empty, it is a single floating pill: round +, prompt
- * field, round mic/send. With attachments it grows into a card so thumbnails
- * can sit above the text with the controls on their own toolbar row.
+ * Cursor-like composer. Context (repo/branch) lives on the composer itself so a
+ * typed prompt is never ambiguous about where it will run.
+ *
+ * Empty + no context: single floating pill.
+ * With context or attachments: card with selector row above the prompt.
  */
 export function PillComposer({
   value,
@@ -25,6 +27,9 @@ export function PillComposer({
   onRemoveImage,
   sending = false,
   imagesEnabled = true,
+  contextLabel,
+  contextHint,
+  onContextPress,
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -35,8 +40,15 @@ export function PillComposer({
   onRemoveImage?: (id: string) => void;
   sending?: boolean;
   imagesEnabled?: boolean;
+  /** e.g. "feat/hello-world" or "checkout-web · feat/hello-world" */
+  contextLabel?: string | null;
+  /** Secondary line shown in a11y / empty state, e.g. repo full name */
+  contextHint?: string | null;
+  onContextPress?: () => void;
 }) {
   const hasImages = pendingImages.length > 0;
+  const hasContext = Boolean(contextLabel?.trim());
+  const expanded = hasImages || hasContext;
   const canSend = !sending && (value.trim().length > 0 || hasImages);
 
   const plusButton = imagesEnabled ? (
@@ -75,7 +87,7 @@ export function PillComposer({
 
   const field = (
     <TextInput
-      style={[styles.input, hasImages && styles.inputExpanded]}
+      style={[styles.input, expanded && styles.inputExpanded]}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
@@ -84,13 +96,33 @@ export function PillComposer({
         if (canSend) onSubmit?.();
       }}
       returnKeyType="send"
-      multiline={hasImages}
-      blurOnSubmit={!hasImages}
+      multiline={expanded}
+      blurOnSubmit={!expanded}
       editable={!sending}
     />
   );
 
-  if (!hasImages) {
+  const contextChip = hasContext ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        contextLabel
+          ? `Worktree selector, ${contextHint ? `${contextHint}, ` : ""}${contextLabel}`
+          : "Worktree selector"
+      }
+      onPress={onContextPress}
+      disabled={sending}
+      style={({ pressed }) => [styles.contextChip, pressed && styles.pressed]}
+    >
+      <Icon name="gitBranch" size={14} color={colors.ink2} strokeWidth={1.8} />
+      <Text style={styles.contextText} numberOfLines={1}>
+        {contextLabel?.trim() || "Select worktree"}
+      </Text>
+      <Icon name="chevronDown" size={14} color={colors.muted} strokeWidth={2.2} />
+    </Pressable>
+  ) : null;
+
+  if (!expanded) {
     return (
       <View style={styles.wrap} pointerEvents="box-none">
         <View style={styles.pill}>
@@ -105,28 +137,32 @@ export function PillComposer({
   return (
     <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.card}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.previews}
-          contentContainerStyle={styles.previewsContent}
-        >
-          {pendingImages.map((img) => (
-            <View key={img.id} style={styles.previewWrap}>
-              <Image source={{ uri: img.uri }} style={styles.preview} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Remove image"
-                style={styles.remove}
-                onPress={() => onRemoveImage?.(img.id)}
-                hitSlop={8}
-                disabled={sending}
-              >
-                <Icon name="close" size={11} color="#fff" strokeWidth={2.6} />
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
+        {contextChip ? <View style={styles.contextRow}>{contextChip}</View> : null}
+
+        {hasImages ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.previews}
+            contentContainerStyle={styles.previewsContent}
+          >
+            {pendingImages.map((img) => (
+              <View key={img.id} style={styles.previewWrap}>
+                <Image source={{ uri: img.uri }} style={styles.preview} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove image"
+                  style={styles.remove}
+                  onPress={() => onRemoveImage?.(img.id)}
+                  hitSlop={8}
+                  disabled={sending}
+                >
+                  <Icon name="close" size={11} color="#fff" strokeWidth={2.6} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
 
         {field}
 
@@ -145,7 +181,6 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    // Cursor’s composer is a quiet, slightly sunken surface rather than a white card.
     backgroundColor: "rgba(242,242,242,0.96)",
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
@@ -154,14 +189,38 @@ const styles = StyleSheet.create({
     ...shadows.floating,
   },
   card: {
-    backgroundColor: "rgba(242,242,242,0.98)",
-    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.95)",
+    borderColor: "rgba(0,0,0,0.06)",
     paddingHorizontal: 10,
-    paddingTop: 11,
+    paddingTop: 10,
     paddingBottom: 7,
     ...shadows.floating,
+  },
+  contextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+    paddingHorizontal: 2,
+  },
+  contextChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: "100%",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#F0F2F5",
+  },
+  contextText: {
+    ...type.meta,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "600",
+    flexShrink: 1,
+    letterSpacing: -0.2,
   },
   previews: { maxHeight: 88, marginBottom: 2 },
   previewsContent: { flexDirection: "row", alignItems: "flex-start", paddingBottom: 4 },

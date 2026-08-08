@@ -113,10 +113,25 @@ export default function InboxScreen() {
   );
 
   const counts = countByFilter(agents);
+  const selectedWorkspace =
+    workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0];
   const selectedWorktree =
-    selectedWorktreeId && selectedWorkspaceId
-      ? (worktreesByWorkspace[selectedWorkspaceId] ?? []).find((t) => t.id === selectedWorktreeId)
-      : undefined;
+    selectedWorkspace && selectedWorktreeId
+      ? (worktreesByWorkspace[selectedWorkspace.id] ?? []).find((t) => t.id === selectedWorktreeId)
+      : selectedWorkspace
+        ? (worktreesByWorkspace[selectedWorkspace.id] ?? [])[0]
+        : undefined;
+  const repoShort =
+    selectedWorkspace?.name ??
+    selectedWorkspace?.fullName?.split("/").pop() ??
+    null;
+  const composerContextLabel = selectedWorktree
+    ? `${repoShort ?? "repo"} · ${selectedWorktree.branch}`
+    : hosts.length === 0
+      ? "Pair a host"
+      : workspaces.length === 0
+        ? "Add repository"
+        : "Select worktree";
 
   function goAddRepository() {
     if (hosts.length === 0) {
@@ -285,25 +300,6 @@ export default function InboxScreen() {
           </Pressable>
         ) : null}
 
-        {selectedWorktree && selectedWorkspaceId ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Active worktree"
-            onPress={() => {
-              const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
-              if (ws) void openWorkspace(ws);
-            }}
-            style={({ pressed }) => [styles.activeTree, pressed && styles.pressed]}
-          >
-            <Icon name="gitBranch" size={16} color={colors.ink2} strokeWidth={1.7} />
-            <Text style={styles.activeTreeText} numberOfLines={1}>
-              {workspaces.find((w) => w.id === selectedWorkspaceId)?.fullName ?? "Workspace"} ·{" "}
-              {selectedWorktree.branch}
-            </Text>
-            <Icon name="chevronRight" size={14} color={colors.muted2} strokeWidth={2.1} />
-          </Pressable>
-        ) : null}
-
         <Text style={styles.sectionLabel}>Workspaces</Text>
 
         {loading && workspaces.length === 0 && hosts.length > 0 ? (
@@ -359,7 +355,7 @@ export default function InboxScreen() {
           </View>
         )}
 
-        <View style={[styles.dockSpacer, { height: 96 + bottomInset }]} />
+        <View style={[styles.dockSpacer, { height: 148 + bottomInset }]} />
       </ScrollView>
 
       <View
@@ -373,6 +369,19 @@ export default function InboxScreen() {
           onSubmit={() => void submitComposer()}
           sending={launching}
           placeholder="Plan, ask, build..."
+          contextLabel={composerContextLabel}
+          contextHint={selectedWorkspace?.fullName ?? selectedWorkspace?.name ?? null}
+          onContextPress={() => {
+            if (hosts.length === 0) {
+              router.push("/pair");
+              return;
+            }
+            if (!selectedWorkspace) {
+              goAddRepository();
+              return;
+            }
+            void openWorkspace(selectedWorkspace);
+          }}
         />
       </View>
     </SafeAreaView>
@@ -409,17 +418,6 @@ const styles = StyleSheet.create({
   inboxTitle: { ...type.display, marginTop: 22, marginBottom: 22 },
   grid: { gap: space.gap, marginBottom: 22, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
-  activeTree: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#EEF3F8",
-    borderRadius: radii.row,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  activeTreeText: { ...type.meta, color: colors.ink2, flex: 1, fontSize: 13 },
   sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
   connectionNotice: {
     flexDirection: "row",
