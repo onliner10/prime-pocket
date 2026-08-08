@@ -73,6 +73,48 @@ Socket probe paths include `~/.prime/agent/daemon.sock`, `~/.prime-agent/daemon.
 
 > The Prime adapter speaks a thin JSONL probe today. Wire it to `DaemonAgentConnection` from prime-agent once you depend on that package for full session/event fidelity.
 
+## GitHub (host-side)
+
+Repositories and branches come from the bridge, never from a Pocket server. Live hosts prefer
+**browser login** (GitHub device flow, same idea as Cursor / `gh auth login`). The access token
+stays on that machine. Paste a personal access token only as a fallback.
+
+### Browser login (recommended)
+
+Prime Pocket ships with a public GitHub OAuth App client id, so browser login works out of the
+box. In the app: **Connect GitHub → Continue with GitHub**, enter the one-time code on github.com;
+the bridge polls until authorized.
+
+To use a different OAuth App (forks / GHES), override the public client id:
+
+```bash
+prime-pocket bridge --github-client-id Ov23li…
+# or
+PRIME_POCKET_GITHUB_CLIENT_ID=Ov23li… prime-pocket bridge
+```
+
+Scopes requested: `repo read:user`. Device flow does not use a client secret.
+
+### Personal access token (fallback)
+
+Classic tokens need the `repo` scope; fine-grained tokens need read access to Contents and Metadata.
+
+```bash
+# 1. Paste it in the app: Connect GitHub → Use a personal access token instead
+# 2. Or store it from the CLI once
+prime-pocket bridge --github-token ghp_xxx
+# 3. Or read it from the host environment
+PRIME_POCKET_GITHUB_TOKEN=ghp_xxx prime-pocket bridge
+```
+
+`GITHUB_TOKEN` / `GITHUB_CLIENT_ID` work as env fallbacks. Disconnecting from the app deletes the
+stored credential. A revoked token is dropped the next time the bridge validates it.
+
+`--demo` (or `PRIME_POCKET_GITHUB_MOCK=1`) serves a synthetic catalog instead, so demos and e2e
+runs need no credentials. A bridge with no Prime daemon falls back to the demo backend and its mock
+catalog too; set `PRIME_POCKET_GITHUB_MOCK=0` to keep live GitHub there. `PRIME_POCKET_GITHUB_API`
+and `PRIME_POCKET_GITHUB_LOGIN` point at GitHub Enterprise hosts.
+
 ## Notifications (optional)
 
 Pocket does not run APNs/FCM. For remote “needs attention” alerts, point the bridge at a [ntfy](https://ntfy.sh) topic you own:
@@ -94,7 +136,7 @@ Features in v1:
 - Pair host (deep link / manual URL + code)
 - Multi-host fleet list
 - Workspaces = repositories/worktrees on a paired host (not the host itself)
-- Add repository from GitHub catalog (mock in `--demo`) or local folder path
+- Add repository from GitHub catalog (live token on the host, mock in `--demo`) or local folder path
 - Agent transcript with live WebSocket stream
 - Prompt / steer / follow-up / cancel
 - Needs-input approve/deny
@@ -107,7 +149,7 @@ Auth: `Authorization: Bearer <token>` (or `?token=` for WS/artifact opens).
 - `GET /v1/host`
 - `POST /v1/pair` — `{ pairCode, deviceLabel }`
 - `GET /v1/workspaces` / `POST /v1/workspaces` / `POST /v1/workspaces/from-github` / `DELETE /v1/workspaces/:id`
-- `GET /v1/github/status` / `GET /v1/github/repos` / `POST /v1/github/connect` (mock in demo)
+- `GET /v1/github/status` / `GET /v1/github/repos` / `POST /v1/github/connect` — `{ mode: "mock" | "token", token? }` / `POST /v1/github/disconnect`
 - `GET /v1/agents` / `POST /v1/agents`
 - `GET /v1/agents/:id`
 - `POST /v1/agents/:id/prompt|steer|follow-up|cancel|needs-input`

@@ -206,6 +206,18 @@ export interface Worktree {
   createdAt: string;
 }
 
+/** In-progress GitHub device-flow (browser) authorization on the host. */
+export interface GitHubOAuthPending {
+  /** Short code the user types on github.com/login/device (e.g. WDJB-MJHT). */
+  userCode: string;
+  /** Browser URL where the user confirms the code. */
+  verificationUri: string;
+  /** Absolute ISO time when the device code expires. */
+  expiresAt: string;
+  /** Suggested seconds between status polls (from GitHub). */
+  interval?: number;
+}
+
 export interface GitHubStatus {
   connected: boolean;
   /** How GitHub is backed on this host. */
@@ -214,7 +226,11 @@ export interface GitHubStatus {
   mock: boolean;
   /** Host can offer a no-credentials mock connect (demo bridges). */
   mockAvailable?: boolean;
+  /** Host has an OAuth App client id and can run browser/device login. */
+  oauthAvailable?: boolean;
   login?: string;
+  /** Present while the user completes browser authorization. */
+  oauth?: GitHubOAuthPending;
 }
 
 export interface GitHubConnectRequest {

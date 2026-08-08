@@ -26,6 +26,14 @@ program
   .option("--ntfy-topic <topic>", "Optional ntfy topic for remote alerts")
   .option("--ntfy-server <url>", "ntfy server base URL", "https://ntfy.sh")
   .option("--daemon-socket <path>", "Prime daemon socket path")
+  .option(
+    "--github-token <token>",
+    "GitHub personal access token to store on this host (or set PRIME_POCKET_GITHUB_TOKEN)",
+  )
+  .option(
+    "--github-client-id <id>",
+    "Override GitHub OAuth App client id (default: shipped Prime Pocket app)",
+  )
   .action(async (opts: {
     port: string;
     demo?: boolean;
@@ -35,10 +43,18 @@ program
     ntfyTopic?: string;
     ntfyServer?: string;
     daemonSocket?: string;
+    githubToken?: string;
+    githubClientId?: string;
   }) => {
     const store = new BridgeStore(opts.dataDir, opts.hostName);
     if (opts.ntfyTopic) {
       store.setNtfy(opts.ntfyTopic, opts.ntfyServer);
+    }
+    if (opts.githubToken?.trim()) {
+      store.setGitHubAuth({ token: opts.githubToken.trim(), mode: "token" });
+    }
+    if (opts.githubClientId?.trim()) {
+      process.env.PRIME_POCKET_GITHUB_CLIENT_ID = opts.githubClientId.trim();
     }
 
     const { backend, mode } = await createBackend({
@@ -64,6 +80,18 @@ program
     for (const u of started.urls) console.log(`    ${u}`);
     console.log(`  fingerprint: ${store.data.identity.fingerprint}`);
     console.log(`  pair code:   ${started.pairing.pairCode} (expires ${store.data.pairCodeExpiresAt})`);
+    const github = server.github.status();
+    console.log(
+      `  github:      ${
+        github.mock
+          ? "mock catalog (demo)"
+          : github.connected
+            ? `${github.mode}${github.login ? ` (${github.login})` : ""}`
+            : github.oauthAvailable
+              ? "not connected — Continue with GitHub in the app"
+              : "not connected — set --github-client-id for browser login, or paste a PAT"
+      }`,
+    );
     if (store.data.ntfyTopic) {
       console.log(`  ntfy:        ${store.data.ntfyServer ?? "https://ntfy.sh"}/${store.data.ntfyTopic}`);
     }

@@ -25,7 +25,7 @@ Pocket connects directly to the user's own infrastructure: the phone reaches a u
 - **One paired host can work in many repositories.** Inbox "Workspaces" are linked repos, not the host itself. Hosts are managed separately under profile.
 - **First-run onboarding** guides: pair desktop bridge → connect GitHub → add a repository.
 - Flow after setup: add a repository (workspace) → create a **worktree** from a branch dropdown → launch an agent into that worktree `cwd`.
-- GitHub connects on the host (mock in `--demo` for demos/e2e without credentials; live OAuth/token later). Repositories and branches come from that catalog.
+- GitHub connects on the host: live hosts prefer browser/device-flow OAuth (Cursor-style), with a personal access token as fallback; the bridge stores the credential locally. `--demo` serves a mock catalog for demos/e2e without credentials. Repositories and branches come from that catalog.
 - Paired hosts are used across changing networks; the app can retry advertised URLs and reconnect when LAN/Tailscale reachability changes.
 - The user can monitor multiple hosts and their agents from one phone, open a live transcript, and send work or decisions from the agent thread.
 - Optional remote notifications use an ntfy topic owned and configured by the user; Pocket itself does not run push infrastructure.
@@ -35,7 +35,7 @@ Pocket connects directly to the user's own infrastructure: the phone reaches a u
 - Pair hosts via QR/deep link, pasted payload, or manual URL plus pair code.
 - Store paired host credentials on-device; native builds use secure storage, while the web build uses browser storage for test scenarios.
 - List and add workspaces (GitHub repos → host worktrees, or local folders); launch agents into a selected workspace `cwd`.
-- GitHub integration is host-side; mock mode is the default in demo for tests and recordings without OAuth/tokens.
+- GitHub integration is host-side: the OAuth or PAT credential lives on the bridge and is never stored by the app or in the cloud. Mock mode is the default in demo for tests and recordings without credentials.
 - Aggregate agents across paired hosts and filter them by all, working, needs attention, or in review.
 - Open a live WebSocket transcript and send prompts and follow-ups. The bridge protocol also exposes steer, cancellation, and needs-input reply endpoints; visible mobile controls for those actions remain an implementation gap to preserve honestly in future work.
 - Display agent-generated artifacts and inline image attachments through authenticated URLs; share images from the phone to an agent.
