@@ -9,6 +9,7 @@ import { filterAgents, statusAccent, statusLabel, type InboxFilter } from "../..
 import { colors, proofSafeArea, radii, shadows, space, type } from "../../src/theme";
 import { CircleButton } from "../../src/components/CircleButton";
 import { Icon, type IconName } from "../../src/components/Icon";
+import { ComposerDock } from "../../src/components/ComposerDock";
 import { PillComposer } from "../../src/components/PillComposer";
 
 const TITLES: Record<InboxFilter, string> = {
@@ -174,10 +175,7 @@ export default function AgentsFilterScreen() {
         }}
       />
 
-      <View
-        style={[styles.composerDock, { bottom: Math.max(14, bottomInset + 10) }]}
-        pointerEvents="box-none"
-      >
+      <ComposerDock restingBottom={Math.max(14, bottomInset + 10)}>
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -187,7 +185,7 @@ export default function AgentsFilterScreen() {
           }}
           placeholder="Plan, ask, build..."
         />
-      </View>
+      </ComposerDock>
     </SafeAreaView>
   );
 }
@@ -240,5 +238,4 @@ const styles = StyleSheet.create({
   badgeText: { ...type.meta, fontSize: 12 },
   meta: { ...type.meta, fontSize: 12, fontWeight: "400", marginTop: 3 },
   preview: { ...type.bodySmall, color: colors.ink2, marginTop: 8 },
-  composerDock: { position: "absolute", left: 12, right: 12 },
 });

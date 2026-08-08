@@ -22,10 +22,12 @@ import { PocketHostClient } from "../../../src/api";
 import { loadPairedHosts } from "../../../src/storage";
 import { colors, fonts, proofSafeArea, radii, shadows, space, type } from "../../../src/theme";
 import { CircleButton } from "../../../src/components/CircleButton";
+import { ComposerDock } from "../../../src/components/ComposerDock";
 import { Icon } from "../../../src/components/Icon";
 import { PillComposer, type PendingImage } from "../../../src/components/PillComposer";
 import { ArtifactImage, MessageImages } from "../../../src/components/MessageImages";
 import { pickImages } from "../../../src/pickImages";
+import { composerDockBottom, useKeyboardHeight } from "../../../src/useKeyboardHeight";
 
 type TimelineItem =
   | { kind: "message"; message: TranscriptMessage }
@@ -180,6 +182,7 @@ export default function AgentScreen() {
   const [sending, setSending] = useState(false);
   const [imagesEnabled, setImagesEnabled] = useState(true);
   const [showJump, setShowJump] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const streamRef = useRef<{ close: () => void } | null>(null);
   const listRef = useRef<FlatList<TimelineItem>>(null);
   const deltasRef = useRef<Record<string, string>>({});
@@ -337,8 +340,12 @@ export default function AgentScreen() {
 
   const showPr = artifacts.length > 0;
   const draftPr = artifacts.length >= 6;
-  const composerBottom = 18 + bottomInset;
-  const actionBottom = composerBottom + 56 + 8;
+  const restingComposerBottom = 18 + bottomInset;
+  const keyboardHeight = useKeyboardHeight();
+  const composerBottom = composerDockBottom(restingComposerBottom, keyboardHeight);
+  const composerExpanded = composerFocused || pendingImages.length > 0;
+  const composerHeight = composerExpanded ? 168 : 56;
+  const actionBottom = composerBottom + composerHeight + 8;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -444,7 +451,7 @@ export default function AgentScreen() {
         </View>
       ) : null}
 
-      <View style={[styles.bottomDock, { bottom: composerBottom }]} pointerEvents="box-none">
+      <ComposerDock restingBottom={restingComposerBottom}>
         <PillComposer
           value={draft}
           onChangeText={setDraft}
@@ -455,8 +462,9 @@ export default function AgentScreen() {
           placeholder="Follow up..."
           sending={sending}
           imagesEnabled={imagesEnabled}
+          onFocusChange={setComposerFocused}
         />
-      </View>
+      </ComposerDock>
     </SafeAreaView>
   );
 }
@@ -540,5 +548,4 @@ const styles = StyleSheet.create({
   actionPillText: { ...type.pill, fontSize: 16, lineHeight: 20, fontWeight: "400" },
   jumpButton: { position: "absolute", right: 0, top: 0 },
   pressed: { opacity: 0.65 },
-  bottomDock: { position: "absolute", left: 12, right: 12 },
 });

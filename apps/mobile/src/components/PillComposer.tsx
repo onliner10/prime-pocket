@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { colors, radii, shadows, type } from "../theme";
 import { Icon } from "./Icon";
@@ -11,9 +12,12 @@ export type PendingImage = {
 };
 
 /**
- * Cursor-like composer. Empty, it is a single floating pill: round +, prompt
- * field, round mic/send. With attachments it grows into a card so thumbnails
- * can sit above the text with the controls on their own toolbar row.
+ * Cursor-like composer. Empty and blurred, it is a single floating pill: round
+ * +, prompt field, round mic/send. Focused (or with attachments) it expands
+ * into a sheet so the text field stays clearly visible above the keyboard.
+ *
+ * Tree shape stays stable across focus so the TextInput is not remounted
+ * (which would dismiss the keyboard).
  */
 export function PillComposer({
   value,
@@ -25,6 +29,7 @@ export function PillComposer({
   onRemoveImage,
   sending = false,
   imagesEnabled = true,
+  onFocusChange,
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -35,9 +40,17 @@ export function PillComposer({
   onRemoveImage?: (id: string) => void;
   sending?: boolean;
   imagesEnabled?: boolean;
+  onFocusChange?: (focused: boolean) => void;
 }) {
+  const [focused, setFocused] = useState(false);
   const hasImages = pendingImages.length > 0;
+  const expanded = focused || hasImages;
   const canSend = !sending && (value.trim().length > 0 || hasImages);
+
+  function setFocus(next: boolean) {
+    setFocused(next);
+    onFocusChange?.(next);
+  }
 
   const plusButton = imagesEnabled ? (
     <Pressable
@@ -73,68 +86,70 @@ export function PillComposer({
     </Pressable>
   );
 
-  const field = (
-    <TextInput
-      style={[styles.input, hasImages && styles.inputExpanded]}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.muted2}
-      onSubmitEditing={() => {
-        if (canSend) onSubmit?.();
-      }}
-      returnKeyType="send"
-      multiline={hasImages}
-      blurOnSubmit={!hasImages}
-      editable={!sending}
-    />
-  );
-
-  if (!hasImages) {
-    return (
-      <View style={styles.wrap} pointerEvents="box-none">
-        <View style={styles.pill}>
-          {plusButton}
-          {field}
-          {sendButton}
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.wrap} pointerEvents="box-none">
-      <View style={styles.card}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.previews}
-          contentContainerStyle={styles.previewsContent}
-        >
-          {pendingImages.map((img) => (
-            <View key={img.id} style={styles.previewWrap}>
-              <Image source={{ uri: img.uri }} style={styles.preview} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Remove image"
-                style={styles.remove}
-                onPress={() => onRemoveImage?.(img.id)}
-                hitSlop={8}
-                disabled={sending}
-              >
-                <Icon name="close" size={11} color="#fff" strokeWidth={2.6} />
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
+      <View style={[styles.surface, expanded ? styles.sheet : styles.pill]}>
+        <View
+          style={[styles.handle, !expanded && styles.handleHidden]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
 
-        {field}
+        {hasImages ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.previews}
+            contentContainerStyle={styles.previewsContent}
+          >
+            {pendingImages.map((img) => (
+              <View key={img.id} style={styles.previewWrap}>
+                <Image source={{ uri: img.uri }} style={styles.preview} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove image"
+                  style={styles.remove}
+                  onPress={() => onRemoveImage?.(img.id)}
+                  hitSlop={8}
+                  disabled={sending}
+                >
+                  <Icon name="close" size={11} color="#fff" strokeWidth={2.6} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
 
-        <View style={styles.toolbar}>
-          {plusButton}
-          <View style={styles.toolbarSpacer} />
-          {sendButton}
+        <View style={[styles.row, expanded && styles.rowExpanded]}>
+          {!expanded ? plusButton : null}
+          <TextInput
+            key="composer-input"
+            style={[styles.input, expanded && styles.inputExpanded]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.muted2}
+            onFocus={() => setFocus(true)}
+            onBlur={() => setFocus(false)}
+            onSubmitEditing={() => {
+              if (canSend) onSubmit?.();
+            }}
+            returnKeyType="send"
+            multiline={expanded}
+            blurOnSubmit={!expanded}
+            editable={!sending}
+            textAlignVertical={expanded ? "top" : "center"}
+          />
+          {!expanded ? sendButton : null}
         </View>
+
+        {expanded ? (
+          <View style={styles.toolbar}>
+            {plusButton}
+            <View style={styles.toolbarSpacer} />
+            {sendButton}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -142,26 +157,37 @@ export function PillComposer({
 
 const styles = StyleSheet.create({
   wrap: { width: "100%" },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    // Cursor’s composer is a quiet, slightly sunken surface rather than a white card.
-    backgroundColor: "rgba(242,242,242,0.96)",
-    borderRadius: radii.pill,
+  surface: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.95)",
-    padding: 6,
     ...shadows.floating,
   },
-  card: {
-    backgroundColor: "rgba(242,242,242,0.98)",
+  pill: {
+    flexDirection: "column",
+    backgroundColor: "rgba(242,242,242,0.96)",
+    borderRadius: radii.pill,
+    padding: 6,
+  },
+  sheet: {
+    backgroundColor: "rgba(252,252,252,0.98)",
     borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.95)",
     paddingHorizontal: 10,
-    paddingTop: 11,
+    paddingTop: 8,
     paddingBottom: 7,
-    ...shadows.floating,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.12)",
+    marginBottom: 8,
+  },
+  handleHidden: {
+    height: 0,
+    marginBottom: 0,
+    opacity: 0,
+    overflow: "hidden",
   },
   previews: { maxHeight: 88, marginBottom: 2 },
   previewsContent: { flexDirection: "row", alignItems: "flex-start", paddingBottom: 4 },
@@ -178,6 +204,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rowExpanded: {
+    alignItems: "stretch",
+  },
   input: {
     ...type.input,
     flex: 1,
@@ -188,13 +221,13 @@ const styles = StyleSheet.create({
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   inputExpanded: {
-    flex: 0,
-    minHeight: 44,
+    minHeight: 88,
+    maxHeight: 160,
     paddingTop: 6,
     paddingBottom: 8,
     textAlignVertical: "top",
   },
-  toolbar: { flexDirection: "row", alignItems: "center" },
+  toolbar: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   toolbarSpacer: { flex: 1 },
   round: {
     width: 42,
