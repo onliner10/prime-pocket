@@ -1,22 +1,21 @@
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { CheckCircle2 } from "@tamagui/lucide-icons-2";
+import { H1, SizableText, Spinner, XStack, YStack } from "tamagui";
 import type { GitHubStatus, PairedHost } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../src/api";
+import { loadOnboardingComplete, loadPairedHosts, saveOnboardingComplete } from "../src/storage";
 import {
-  loadOnboardingComplete,
-  loadPairedHosts,
-  saveOnboardingComplete,
-} from "../src/storage";
-import { colors, proofSafeArea, radii, space, type } from "../src/theme";
-import { Icon } from "../src/components/Icon";
+  ChipButton,
+  ErrorText,
+  Gutter,
+  IconTile,
+  Lead,
+  Meta,
+  PrimaryButton,
+  Screen,
+  Surface,
+} from "../src/ui";
 
 type Step = 1 | 2 | 3;
 
@@ -84,16 +83,20 @@ export default function OnboardingScreen() {
   const githubReady = Boolean(github?.connected);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <View style={styles.body}>
-        <Text style={styles.brand}>Prime Pocket</Text>
-        <Text style={styles.title}>Get set up</Text>
-        <Text style={styles.lead}>
+    <Screen bottomEdge>
+      <Gutter flex={1} pt={28} pb={24}>
+        <Meta fontWeight="600" mb={8}>
+          Prime Pocket
+        </Meta>
+        <H1 fontSize="$10" fontWeight="500" color="$color" mb={10}>
+          Get set up
+        </H1>
+        <Lead mb={28}>
           Connect your desktop bridge, then GitHub. After that you can add a repo and start an
           agent.
-        </Text>
+        </Lead>
 
-        <View style={styles.steps}>
+        <YStack gap={12}>
           <StepRow
             index={1}
             title="Pair desktop bridge"
@@ -120,16 +123,18 @@ export default function OnboardingScreen() {
             done={githubReady}
             active={step === 2}
             actionLabel={
-              !hostReady ? undefined : githubReady ? undefined : github?.mockAvailable ? "Use mock GitHub" : "Connect GitHub"
+              !hostReady || githubReady
+                ? undefined
+                : github?.mockAvailable
+                  ? "Use mock GitHub"
+                  : "Connect GitHub"
             }
             onAction={
-              !hostReady
+              !hostReady || githubReady
                 ? undefined
-                : githubReady
-                  ? undefined
-                  : github?.mockAvailable
-                    ? () => void connectMockGitHub()
-                    : () => router.push("/github")
+                : github?.mockAvailable
+                  ? () => void connectMockGitHub()
+                  : () => router.push("/github")
             }
             busy={busy}
           />
@@ -142,27 +147,29 @@ export default function OnboardingScreen() {
             actionLabel={hostReady && githubReady ? "Choose repository" : undefined}
             onAction={hostReady && githubReady ? () => void finish() : undefined}
           />
-        </View>
+        </YStack>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <ErrorText mt={14}>{error}</ErrorText> : null}
 
-        <View style={{ flex: 1 }} />
+        <YStack flex={1} />
 
         {hostReady && githubReady ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Finish setup"
+          <PrimaryButton
+            role="button"
+            aria-label="Finish setup"
             onPress={() => void finish()}
-            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+            enterStyle={{ opacity: 0, y: 12 }}
+            transition="medium"
           >
-            <Text style={styles.primaryText}>Continue</Text>
-          </Pressable>
+            Continue
+          </PrimaryButton>
         ) : null}
-      </View>
-    </SafeAreaView>
+      </Gutter>
+    </Screen>
   );
 }
 
+/** One numbered setup task. The active step is outlined; a done step goes green. */
 function StepRow({
   index,
   title,
@@ -183,87 +190,44 @@ function StepRow({
   busy?: boolean;
 }) {
   return (
-    <View
-      style={[styles.step, active && styles.stepActive, done && styles.stepDone]}
-      accessibilityState={{ selected: active }}
+    <Surface
+      flexDirection="row"
+      gap={12}
+      p={14}
+      aria-selected={active}
+      transition="quick"
+      borderWidth={active ? 1.5 : 1}
+      borderColor={active ? "$color11" : "$color3"}
     >
-      <View style={[styles.badge, done && styles.badgeDone]}>
+      <IconTile theme={done ? "success" : null}>
         {done ? (
-          <Icon name="checkCircle" size={18} color={colors.addGreen} strokeWidth={1.8} />
+          <CheckCircle2 size={18} color="$color10" strokeWidth={1.8} />
         ) : (
-          <Text style={styles.badgeText}>{index}</Text>
+          <SizableText fontSize="$4" fontWeight="600" color="$color">
+            {index}
+          </SizableText>
         )}
-      </View>
-      <View style={styles.stepText}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={styles.stepBody}>{body}</Text>
+      </IconTile>
+
+      <YStack flex={1} gap={4}>
+        <SizableText fontSize="$6" fontWeight="600" color="$color">
+          {title}
+        </SizableText>
+        <Meta>{body}</Meta>
         {actionLabel && onAction ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={actionLabel}
+          <ChipButton
+            self="flex-start"
+            mt={10}
+            role="button"
+            aria-label={actionLabel}
             disabled={busy}
             onPress={onAction}
-            style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+            icon={busy ? <Spinner size="small" color="$color" /> : undefined}
           >
-            {busy ? (
-              <ActivityIndicator color={colors.ink} />
-            ) : (
-              <Text style={styles.stepBtnText}>{actionLabel}</Text>
-            )}
-          </Pressable>
+            {actionLabel}
+          </ChipButton>
         ) : null}
-      </View>
-    </View>
+      </YStack>
+    </Surface>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg, paddingTop: proofSafeArea.top },
-  body: { flex: 1, paddingHorizontal: space.gutter, paddingTop: 28, paddingBottom: 24 },
-  brand: { ...type.meta, color: colors.muted, marginBottom: 8, fontWeight: "600" },
-  title: { ...type.display, marginBottom: 10 },
-  lead: { ...type.body, color: colors.ink2, marginBottom: 28 },
-  steps: { gap: 12 },
-  step: {
-    flexDirection: "row",
-    gap: 12,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.row,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  stepActive: { borderColor: colors.ink, borderWidth: 1.5 },
-  stepDone: { opacity: 0.95 },
-  badge: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    backgroundColor: colors.chip,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeDone: { backgroundColor: "#E8F8EE" },
-  badgeText: { ...type.row, fontWeight: "600", fontSize: 15 },
-  stepText: { flex: 1, gap: 4 },
-  stepTitle: { ...type.row, fontSize: 17, fontWeight: "600" },
-  stepBody: { ...type.meta, color: colors.muted, fontSize: 13, lineHeight: 18 },
-  stepBtn: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    backgroundColor: colors.chip,
-    borderRadius: radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  stepBtnText: { ...type.meta, color: colors.ink, fontWeight: "600", fontSize: 14 },
-  error: { ...type.meta, color: colors.danger, marginTop: 14 },
-  primary: {
-    backgroundColor: colors.ink,
-    borderRadius: radii.row,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  primaryText: { ...type.row, color: "#fff", fontWeight: "600", fontSize: 16 },
-  pressed: { opacity: 0.75 },
-});

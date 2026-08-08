@@ -13,6 +13,7 @@ export {
   StatusDot,
   Mono,
 } from "./Surface";
+export { Field, FieldArea, FieldLabel } from "./Field";
 export { EmptyState } from "./EmptyState";
 export { ConnectionNotice } from "./ConnectionNotice";
 export { PickerSheet, PickerRow } from "./PickerSheet";

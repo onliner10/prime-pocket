@@ -293,7 +293,7 @@ export function PillComposer({
             returnKeyType="send"
             multiline={expanded}
             blurOnSubmit={!expanded}
-            editable={!sending}
+            readOnly={sending}
             textAlignVertical={expanded ? "top" : "center"}
           />
           {expanded ? null : sendButton}
