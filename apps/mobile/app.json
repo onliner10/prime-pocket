@@ -29,12 +29,19 @@
       "foregroundImage": "./assets/adaptive-icon.png",
       "backgroundColor": "#F2F2F2"
     },
-    "package": "ai.primeintellect.pocket",
-    "usesCleartextTraffic": true
+    "package": "ai.primeintellect.pocket"
   },
   "plugins": [
     "expo-router",
     "expo-secure-store",
+    [
+      "expo-build-properties",
+      {
+        "android": {
+          "usesCleartextTraffic": true
+        }
+      }
+    ],
     [
       "expo-camera",
       {
