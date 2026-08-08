@@ -327,11 +327,13 @@ export default function InboxScreen() {
           <View style={styles.workspaces}>
             {workspaces.map((w) => {
               const trees = worktreesByWorkspace[w.id] ?? [];
-              const active =
-                trees.find((t) => t.id === selectedWorktreeId) ?? trees[0];
-              const subtitle = active
-                ? `${active.branch} · ${active.cwd}`
-                : "No worktree — tap to create one";
+              const n = trees.length;
+              const subtitle =
+                n === 0
+                  ? "No worktrees — tap to create one"
+                  : n === 1
+                    ? `1 worktree · default ${w.defaultBranch ?? "main"}`
+                    : `${n} worktrees · default ${w.defaultBranch ?? "main"}`;
               return (
                 <WorkspaceRow
                   key={w.id}
