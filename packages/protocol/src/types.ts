@@ -212,7 +212,16 @@ export interface GitHubStatus {
   mode: "mock" | "token" | "oauth" | "disconnected";
   /** True when catalog data is synthetic (safe for demos / e2e). */
   mock: boolean;
+  /** Host can offer a no-credentials mock connect (demo bridges). */
+  mockAvailable?: boolean;
   login?: string;
+}
+
+export interface GitHubConnectRequest {
+  /** Prefer mock when the host supports it (demos / e2e). */
+  mode?: "mock" | "oauth" | "token";
+  /** Optional PAT when mode is token (live hosts). */
+  token?: string;
 }
 
 export interface GitHubCatalogRepo {
@@ -224,6 +233,13 @@ export interface GitHubCatalogRepo {
   htmlUrl: string;
   /** Language label for list affordance, optional. */
   language?: string;
+}
+
+export interface GitHubBranch {
+  name: string;
+  protected?: boolean;
+  /** True when this is the repository default branch. */
+  isDefault?: boolean;
 }
 
 export interface AddWorkspaceFromGitHubRequest {

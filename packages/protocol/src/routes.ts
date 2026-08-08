@@ -14,7 +14,10 @@ export const Routes = {
     `${API_PREFIX}/workspaces/${encodeURIComponent(workspaceId)}/worktrees/${encodeURIComponent(worktreeId)}`,
   githubStatus: `${API_PREFIX}/github/status`,
   githubRepos: `${API_PREFIX}/github/repos`,
+  githubRepoBranches: (owner: string, repo: string) =>
+    `${API_PREFIX}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
   githubConnect: `${API_PREFIX}/github/connect`,
+  githubDisconnect: `${API_PREFIX}/github/disconnect`,
   agents: `${API_PREFIX}/agents`,
   agent: (id: string) => `${API_PREFIX}/agents/${encodeURIComponent(id)}`,
   agentPrompt: (id: string) => `${API_PREFIX}/agents/${encodeURIComponent(id)}/prompt`,

@@ -6,7 +6,9 @@ import {
   type AgentSummary,
   type CreateWorktreeRequest,
   type FollowUpRequest,
+  type GitHubBranch,
   type GitHubCatalogRepo,
+  type GitHubConnectRequest,
   type GitHubStatus,
   type HostInfo,
   type LaunchAgentRequest,
@@ -171,8 +173,17 @@ export class PocketHostClient {
     return parseJson(res);
   }
 
-  async connectGitHub(): Promise<GitHubStatus> {
+  async connectGitHub(req: GitHubConnectRequest = { mode: "mock" }): Promise<GitHubStatus> {
     const res = await fetch(this.url(Routes.githubConnect), {
+      method: "POST",
+      headers: authHeaders(this.host.token),
+      body: JSON.stringify(req),
+    });
+    return parseJson(res);
+  }
+
+  async disconnectGitHub(): Promise<GitHubStatus> {
+    const res = await fetch(this.url(Routes.githubDisconnect), {
       method: "POST",
       headers: authHeaders(this.host.token),
       body: "{}",
@@ -186,6 +197,16 @@ export class PocketHostClient {
       headers: authHeaders(this.host.token),
     });
     return parseJson(res);
+  }
+
+  async listGitHubBranches(fullName: string): Promise<GitHubBranch[]> {
+    const [owner, repo] = fullName.split("/");
+    if (!owner || !repo) throw new Error("fullName must be owner/repo");
+    const res = await fetch(this.url(Routes.githubRepoBranches(owner, repo)), {
+      headers: authHeaders(this.host.token),
+    });
+    const data = await parseJson<{ branches: GitHubBranch[] }>(res);
+    return data.branches;
   }
 
   async launch(req: LaunchAgentRequest): Promise<AgentSummary> {

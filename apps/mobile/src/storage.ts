@@ -6,6 +6,7 @@ import type { PairedHost } from "@prime-pocket/protocol";
 const KEY = "prime-pocket.paired-hosts";
 const SELECTED_WORKSPACE_KEY = "prime-pocket.selected-workspace";
 const SELECTED_WORKTREE_KEY = "prime-pocket.selected-worktree";
+const ONBOARDING_KEY = "prime-pocket.onboarding-complete";
 
 async function getItem(key: string): Promise<string | null> {
   if (Platform.OS === "web") return AsyncStorage.getItem(key);
@@ -96,4 +97,17 @@ export async function saveSelectedWorktreeId(hostId: string, worktreeId: string)
   }
   map[hostId] = worktreeId;
   await setItem(SELECTED_WORKTREE_KEY, JSON.stringify(map));
+}
+
+export async function loadOnboardingComplete(): Promise<boolean> {
+  const raw = await getItem(ONBOARDING_KEY);
+  return raw === "1";
+}
+
+export async function saveOnboardingComplete(): Promise<void> {
+  await setItem(ONBOARDING_KEY, "1");
+}
+
+export async function clearOnboardingComplete(): Promise<void> {
+  await setItem(ONBOARDING_KEY, "0");
 }

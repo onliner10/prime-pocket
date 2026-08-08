@@ -16,6 +16,7 @@ import {
   type ApiErrorBody,
   type CreateWorktreeRequest,
   type FollowUpRequest,
+  type GitHubConnectRequest,
   type HostInfo,
   type LaunchAgentRequest,
   type NeedsInputReply,
@@ -461,11 +462,19 @@ export class BridgeServer {
       if (req.method === "POST" && path === Routes.githubConnect) {
         if (!this.requireAuth(req, res, url)) return;
         try {
-          const status = await this.github.connect();
+          const body = JSON.parse((await readBody(req)) || "{}") as GitHubConnectRequest;
+          const status = await this.github.connect(body);
           sendJson(res, 200, status);
         } catch (e) {
           sendError(res, 400, e instanceof Error ? e.message : String(e), "github_unavailable");
         }
+        return;
+      }
+
+      if (req.method === "POST" && path === Routes.githubDisconnect) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = await this.github.disconnect();
+        sendJson(res, 200, status);
         return;
       }
 
@@ -479,6 +488,22 @@ export class BridgeServer {
         const q = url.searchParams.get("q") ?? undefined;
         const repos = await this.github.listRepos(q);
         sendJson(res, 200, { repos, status });
+        return;
+      }
+
+      const branchMatch = path.match(/^\/v1\/github\/repos\/([^/]+)\/([^/]+)\/branches$/);
+      if (req.method === "GET" && branchMatch) {
+        if (!this.requireAuth(req, res, url)) return;
+        const status = this.github.status();
+        if (!status.connected) {
+          sendError(res, 401, "GitHub not connected on this host", "github_disconnected");
+          return;
+        }
+        const owner = decodeURIComponent(branchMatch[1]!);
+        const repo = decodeURIComponent(branchMatch[2]!);
+        const fullName = `${owner}/${repo}`;
+        const branches = await this.github.listBranches(fullName);
+        sendJson(res, 200, { branches, fullName });
         return;
       }
 

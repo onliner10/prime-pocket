@@ -47,14 +47,10 @@ export default function AddRepositoryScreen() {
       const gh = await client.githubStatus();
       setStatus(gh);
       if (!gh.connected) {
-        try {
-          const connected = await client.connectGitHub();
-          setStatus(connected);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-          setRepos([]);
-          return;
-        }
+        setRepos([]);
+        setLoading(false);
+        router.replace("/github");
+        return;
       }
       const catalog = await client.listGitHubRepos(q);
       setStatus(catalog.status);

@@ -1,22 +1,23 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { PairedHost, Workspace } from "@prime-pocket/protocol";
+import type { GitHubBranch, PairedHost, Workspace } from "@prime-pocket/protocol";
 import { PocketHostClient } from "../../../src/api";
 import {
   loadPairedHosts,
   saveSelectedWorktreeId,
   saveSelectedWorkspaceId,
 } from "../../../src/storage";
-import { colors, fonts, proofSafeArea, radii, space, type } from "../../../src/theme";
+import { colors, proofSafeArea, radii, space, type } from "../../../src/theme";
 import { CircleButton } from "../../../src/components/CircleButton";
 import { Icon } from "../../../src/components/Icon";
 
@@ -25,33 +26,51 @@ export default function CreateWorktreeScreen() {
   const { workspaceId } = useLocalSearchParams<{ workspaceId: string }>();
   const [host, setHost] = useState<PairedHost | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [branch, setBranch] = useState("feat/hello-world");
+  const [branches, setBranches] = useState<GitHubBranch[]>([]);
+  const [branch, setBranch] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        const hosts = await loadPairedHosts();
-        const paired = hosts[0] ?? null;
-        setHost(paired);
-        if (!paired || !workspaceId) return;
+        setLoading(true);
+        setError(null);
         try {
+          const hosts = await loadPairedHosts();
+          const paired = hosts[0] ?? null;
+          setHost(paired);
+          if (!paired || !workspaceId) return;
           const client = new PocketHostClient(paired);
           const detail = await client.getWorkspace(workspaceId);
           setWorkspace(detail.workspace);
-          if (detail.workspace.defaultBranch && branch === "feat/hello-world") {
-            // keep demo-friendly default branch name
+          const fullName = detail.workspace.fullName;
+          if (fullName) {
+            const list = await client.listGitHubBranches(fullName);
+            setBranches(list);
+            const preferred =
+              list.find((b) => b.name === "feat/hello-world") ??
+              list.find((b) => b.isDefault) ??
+              list[0];
+            setBranch(preferred?.name ?? detail.workspace.defaultBranch ?? "main");
+          } else {
+            const fallback = detail.workspace.defaultBranch ?? "main";
+            setBranches([{ name: fallback, isDefault: true }]);
+            setBranch(fallback);
           }
         } catch (e) {
           setError(e instanceof Error ? e.message : String(e));
+        } finally {
+          setLoading(false);
         }
       })();
-    }, [workspaceId, branch]),
+    }, [workspaceId]),
   );
 
   async function create() {
-    if (!host || !workspaceId || !branch.trim() || busy) return;
+    if (!host || !workspaceId || !branch?.trim() || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -94,27 +113,33 @@ export default function CreateWorktreeScreen() {
         </View>
 
         <Text style={styles.label}>Branch</Text>
-        <TextInput
-          style={styles.input}
-          value={branch}
-          onChangeText={setBranch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="feat/my-change"
-          placeholderTextColor={colors.muted2}
-          accessibilityLabel="Branch name"
-        />
+        {loading ? (
+          <ActivityIndicator color={colors.muted2} style={{ marginVertical: 12 }} />
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Branch dropdown"
+            onPress={() => setPickerOpen(true)}
+            style={({ pressed }) => [styles.dropdown, pressed && styles.pressed]}
+          >
+            <Icon name="gitBranch" size={17} color={colors.ink2} strokeWidth={1.7} />
+            <Text style={styles.dropdownValue} numberOfLines={1}>
+              {branch ?? "Select branch"}
+            </Text>
+            <Icon name="chevronDown" size={16} color={colors.muted} strokeWidth={2} />
+          </Pressable>
+        )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Create worktree"
-          disabled={!branch.trim() || busy}
+          disabled={!branch?.trim() || busy || loading}
           onPress={() => void create()}
           style={({ pressed }) => [
             styles.primary,
-            (!branch.trim() || busy) && styles.primaryDisabled,
+            (!branch?.trim() || busy || loading) && styles.primaryDisabled,
             pressed && styles.pressed,
           ]}
         >
@@ -125,6 +150,43 @@ export default function CreateWorktreeScreen() {
           )}
         </Pressable>
       </View>
+
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Select branch</Text>
+            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+              {branches.map((b) => {
+                const selected = b.name === branch;
+                return (
+                  <Pressable
+                    key={b.name}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Branch ${b.name}`}
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      setBranch(b.name);
+                      setPickerOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.branchRow,
+                      selected && styles.branchRowSelected,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Icon name="gitBranch" size={16} color={colors.ink2} strokeWidth={1.7} />
+                    <Text style={styles.branchName}>{b.name}</Text>
+                    {b.isDefault ? <Text style={styles.defaultPill}>default</Text> : null}
+                    {selected ? (
+                      <Icon name="checkCircle" size={16} color={colors.addGreen} strokeWidth={1.8} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -154,18 +216,18 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   repoName: { ...type.row, fontSize: 16, flex: 1 },
-  input: {
-    ...type.body,
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     backgroundColor: colors.bgElevated,
     borderRadius: radii.row,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    color: colors.ink,
-    fontFamily: fonts.mono,
-    fontSize: 15,
   },
+  dropdownValue: { ...type.row, fontSize: 16, flex: 1, fontWeight: "500" },
   error: { ...type.meta, color: colors.danger, marginTop: 6 },
   primary: {
     marginTop: 18,
@@ -177,4 +239,37 @@ const styles = StyleSheet.create({
   primaryDisabled: { opacity: 0.35 },
   primaryText: { ...type.row, color: "#fff", fontWeight: "600", fontSize: 16 },
   pressed: { opacity: 0.75 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+    padding: 12,
+  },
+  modalSheet: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 18,
+    padding: 16,
+    maxHeight: "70%",
+  },
+  modalTitle: { ...type.row, fontSize: 17, fontWeight: "600", marginBottom: 10 },
+  branchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  branchRowSelected: { backgroundColor: "#F0F4F8", marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 10 },
+  branchName: { ...type.row, fontSize: 16, flex: 1 },
+  defaultPill: {
+    ...type.meta,
+    fontSize: 11,
+    color: colors.muted,
+    backgroundColor: colors.chip,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    overflow: "hidden",
+  },
 });

@@ -45,6 +45,16 @@ export default function HostsScreen() {
         Paired bridges are stored on-device. Each host can expose many GitHub/local repositories as
         workspaces. Remote access uses Tailscale or LAN — Pocket does not run a relay.
       </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Connect GitHub"
+        onPress={() => router.push("/github")}
+        style={({ pressed }) => [styles.githubBtn, pressed && { opacity: 0.7 }]}
+      >
+        <Icon name="github" size={18} color={colors.ink} strokeWidth={1.7} />
+        <Text style={styles.githubBtnText}>Connect GitHub</Text>
+        <Icon name="chevronRight" size={16} color={colors.muted2} strokeWidth={2.1} />
+      </Pressable>
       <FlatList
         data={hosts}
         keyExtractor={(h) => h.hostId}
@@ -87,6 +97,19 @@ const styles = StyleSheet.create({
   },
   title: type.navTitle,
   help: { ...type.body, color: colors.muted, paddingHorizontal: space.gutter, paddingTop: 14 },
+  githubBtn: {
+    marginHorizontal: space.gutter,
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.row,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    ...shadows.row,
+  },
+  githubBtnText: { ...type.row, fontSize: 16, flex: 1, fontWeight: "500" },
   list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
   empty: { ...type.body, color: colors.muted, textAlign: "center", marginTop: 40 },
   card: {

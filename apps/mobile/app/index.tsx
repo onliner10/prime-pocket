@@ -13,6 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { AgentSummary, PairedHost, Workspace, Worktree } from "@prime-pocket/protocol";
 import { listFleetAgents, listFleetWorkspaces, PocketHostClient } from "../src/api";
 import {
+  loadOnboardingComplete,
   loadPairedHosts,
   loadSelectedWorktreeId,
   loadSelectedWorkspaceId,
@@ -101,8 +102,14 @@ export default function InboxScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-    }, [refresh]),
+      void (async () => {
+        if (!(await loadOnboardingComplete())) {
+          router.replace("/onboarding");
+          return;
+        }
+        await refresh();
+      })();
+    }, [refresh, router]),
   );
 
   const counts = countByFilter(agents);

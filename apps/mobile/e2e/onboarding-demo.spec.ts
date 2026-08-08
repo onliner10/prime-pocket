@@ -1,5 +1,6 @@
 /**
- * Demo: pair host → add GitHub repo (workspace) → create worktree → first task.
+ * First-run: onboarding → pair host → connect GitHub (mock) →
+ * add repo → branch dropdown worktree → first agent task.
  */
 import { test, expect } from "@playwright/test";
 import { readFileSync, mkdirSync } from "node:fs";
@@ -47,59 +48,66 @@ async function typeSlow(
 }
 
 test.describe("Onboarding demo video", () => {
-  test("workspace from repo, worktree, then agent task", async ({ page }) => {
+  test("onboard, GitHub, worktree branch, agent task", async ({ page }) => {
     mkdirSync(OUT, { recursive: true });
     test.setTimeout(180_000);
 
     await clearApp(page);
-    await expect(page.getByText("Inbox").first()).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Get set up").first()).toBeVisible({ timeout: 20000 });
     await waitFonts(page);
     await page.waitForTimeout(1600);
 
-    // 1) Pair host
-    await page.getByLabel("Hosts").click();
-    await page.getByLabel("Pair host").click();
-    await expect(page.getByText("Pair host").first()).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(700);
+    // Step 1 — pair host
+    await page.getByRole("button", { name: "Pair host" }).click();
+    await expect(page.getByPlaceholder("http://127.0.0.1:17420")).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(600);
     const pairCode = currentPairCode();
     const urlBox = page.getByPlaceholder("http://127.0.0.1:17420");
     await urlBox.fill("");
     await urlBox.pressSequentially(BRIDGE, { delay: 25 });
     await typeSlow(page, page.getByPlaceholder("pair code"), pairCode, 70);
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
     await page.getByText("Pair manually", { exact: true }).click();
-    await page.waitForTimeout(700);
-    await page.goto(EXPO, { waitUntil: "networkidle" });
-    await expect(page.getByText("No repositories yet")).toBeVisible({ timeout: 20000 });
-    await page.waitForTimeout(1200);
+    await expect(page.getByRole("button", { name: "Use mock GitHub" })).toBeVisible({
+      timeout: 20000,
+    });
+    await expect(page.getByText(/Connected to/i).first()).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
-    // 2) Create workspace from GitHub repo (mock)
-    await page.getByLabel("Add a repository").click();
+    // Step 2 — connect GitHub (mock)
+    await page.getByRole("button", { name: "Use mock GitHub" }).click();
+    await expect(page.getByText(/Signed in as pocket-demo/i).first()).toBeVisible({
+      timeout: 15000,
+    });
+    await page.waitForTimeout(1000);
+    await page.getByRole("button", { name: "Finish setup" }).click();
+
+    // Step 3 — add repository
     await expect(page.getByText("Add repository").first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/Mock GitHub/i)).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(900);
     await page.getByLabel("Add acme/checkout-web").click();
 
-    // 3) Create worktree on that workspace
+    // Step 4 — branch dropdown + create worktree
     await expect(page.getByText("New worktree").first()).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText("acme/checkout-web").first()).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(900);
-    const branch = page.getByLabel("Branch name");
-    await typeSlow(page, branch, "feat/hello-world", 45);
+    await page.waitForTimeout(700);
+    await page.getByLabel("Branch dropdown").click();
+    await expect(page.getByText("Select branch").first()).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(600);
+    await page.getByLabel("Branch feat/hello-world").click();
+    await expect(page.getByLabel("Branch dropdown")).toContainText("feat/hello-world");
     await page.waitForTimeout(700);
     await page.getByLabel("Create worktree").click();
 
     await expect(page.getByText("acme/checkout-web").first()).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/feat\/hello-world/i).first()).toBeVisible({ timeout: 15000 });
-    await waitFonts(page);
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(1400);
 
-    // 4) Ask agent to complete work in that worktree
+    // Step 5 — agent task in that worktree
     const prompt = "Add a hello world script in TypeScript";
     const composer = page.getByPlaceholder("Plan, ask, build...").last();
     await typeSlow(page, composer, prompt, 40);
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(700);
     await page.getByRole("button", { name: "Send" }).click();
 
     await expect(page.getByPlaceholder("Follow up...")).toBeVisible({ timeout: 25000 });
@@ -112,6 +120,6 @@ test.describe("Onboarding demo video", () => {
     await expect(page.getByText(/Got it|demo|TypeScript/i).first()).toBeVisible({
       timeout: 15000,
     });
-    await page.waitForTimeout(2800);
+    await page.waitForTimeout(2400);
   });
 });

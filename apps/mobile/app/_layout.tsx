@@ -19,12 +19,15 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+        <Stack.Screen name="github" options={{ presentation: "modal" }} />
         <Stack.Screen name="agents/index" />
         <Stack.Screen name="agents/[filter]" />
         <Stack.Screen name="pair" options={{ presentation: "modal" }} />
         <Stack.Screen name="scan" options={{ presentation: "modal" }} />
         <Stack.Screen name="agent/[hostId]/[agentId]" />
         <Stack.Screen name="hosts" />
+        <Stack.Screen name="repos/add" options={{ presentation: "modal" }} />
       </Stack>
     </SafeAreaProvider>
   );
