@@ -101,6 +101,8 @@ program
         launch: true,
         images: true,
         demoMode: true,
+        workspaces: true,
+        github: true,
       },
     };
     // Build pairing via a short-lived server helper without listening

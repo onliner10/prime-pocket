@@ -98,6 +98,8 @@ export class DemoBackend implements AgentBackend {
     launch: true,
     images: true,
     demoMode: true,
+    workspaces: true,
+    github: true,
   };
 
   private readonly hostId: HostId;

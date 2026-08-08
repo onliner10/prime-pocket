@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { decodePairingQr, type PairedHost } from "@prime-pocket/protocol";
 import { pairWithHost, resolveReachableBaseUrl } from "../src/api";
-import { upsertPairedHost } from "../src/storage";
+import { loadOnboardingComplete, upsertPairedHost } from "../src/storage";
 import { colors, fonts, proofSafeArea, radii, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
 import { Icon } from "../src/components/Icon";
@@ -46,7 +46,8 @@ export default function PairScreen() {
         pairedAt: new Date().toISOString(),
       };
       await upsertPairedHost(paired);
-      router.replace("/");
+      const onboarded = await loadOnboardingComplete();
+      router.replace(onboarded ? "/" : "/onboarding");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/invalid or expired pair code/i.test(msg) || /pair_invalid/i.test(msg)) {
