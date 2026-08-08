@@ -285,14 +285,23 @@ export default function InboxScreen() {
           </Pressable>
         ) : null}
 
-        {selectedWorktree ? (
-          <View style={styles.activeTree} accessibilityLabel="Active worktree">
+        {selectedWorktree && selectedWorkspaceId ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Active worktree"
+            onPress={() => {
+              const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
+              if (ws) void openWorkspace(ws);
+            }}
+            style={({ pressed }) => [styles.activeTree, pressed && styles.pressed]}
+          >
             <Icon name="gitBranch" size={16} color={colors.ink2} strokeWidth={1.7} />
             <Text style={styles.activeTreeText} numberOfLines={1}>
               {workspaces.find((w) => w.id === selectedWorkspaceId)?.fullName ?? "Workspace"} ·{" "}
               {selectedWorktree.branch}
             </Text>
-          </View>
+            <Icon name="chevronRight" size={14} color={colors.muted2} strokeWidth={2.1} />
+          </Pressable>
         ) : null}
 
         <Text style={styles.sectionLabel}>Workspaces</Text>

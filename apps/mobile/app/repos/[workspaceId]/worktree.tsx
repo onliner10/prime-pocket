@@ -81,7 +81,8 @@ export default function CreateWorktreeScreen() {
       });
       await saveSelectedWorkspaceId(host.hostId, workspaceId);
       await saveSelectedWorktreeId(host.hostId, worktree.id);
-      router.replace("/");
+      // Pop stacked screens so Inbox remounts/focuses with the new selection.
+      router.dismissTo("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

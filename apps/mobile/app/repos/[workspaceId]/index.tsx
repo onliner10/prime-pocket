@@ -61,7 +61,7 @@ export default function WorkspaceDetailScreen() {
     if (!host || !workspaceId) return;
     await saveSelectedWorkspaceId(host.hostId, workspaceId);
     await saveSelectedWorktreeId(host.hostId, wt.id);
-    router.replace("/");
+    router.dismissTo("/");
   }
 
   return (
