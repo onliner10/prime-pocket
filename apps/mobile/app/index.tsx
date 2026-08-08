@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,9 +11,16 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AgentSummary, PairedHost } from "@prime-pocket/protocol";
-import { listFleetAgents, PocketHostClient } from "../src/api";
-import { loadPairedHosts } from "../src/storage";
+import type { AgentSummary, PairedHost, Workspace, Worktree } from "@prime-pocket/protocol";
+import { listFleetAgents, listFleetWorkspaces, PocketHostClient } from "../src/api";
+import {
+  loadOnboardingComplete,
+  loadPairedHosts,
+  loadSelectedWorktreeId,
+  loadSelectedWorkspaceId,
+  saveSelectedWorktreeId,
+  saveSelectedWorkspaceId,
+} from "../src/storage";
 import { countByFilter } from "../src/inbox";
 import { colors, proofSafeArea, radii, shadows, space, type } from "../src/theme";
 import { CircleButton } from "../src/components/CircleButton";
@@ -22,16 +30,23 @@ import { WorkspaceRow } from "../src/components/WorkspaceRow";
 import { ComposerDock } from "../src/components/ComposerDock";
 import { PillComposer } from "../src/components/PillComposer";
 
+type FleetWorkspace = Workspace & { hostId: string };
+
 export default function InboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom + proofSafeArea.bottom;
   const [hosts, setHosts] = useState<PairedHost[]>([]);
+  const [workspaces, setWorkspaces] = useState<FleetWorkspace[]>([]);
+  const [worktreesByWorkspace, setWorktreesByWorkspace] = useState<Record<string, Worktree[]>>({});
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [launching, setLaunching] = useState(false);
+  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -40,40 +55,149 @@ export default function InboxScreen() {
     setHosts(paired);
     if (paired.length === 0) {
       setAgents([]);
+      setWorkspaces([]);
+      setWorktreesByWorkspace({});
+      setSelectedWorkspaceId(null);
+      setSelectedWorktreeId(null);
       setLoading(false);
       return;
     }
-    const result = await listFleetAgents(paired);
-    setAgents(result.agents);
-    setConnectionError(result.errors.length ? `${result.errors.length} workspace${result.errors.length === 1 ? "" : "s"} unavailable` : null);
+    const [agentResult, workspaceResult] = await Promise.all([
+      listFleetAgents(paired),
+      listFleetWorkspaces(paired),
+    ]);
+    setAgents(agentResult.agents);
+    setWorkspaces(workspaceResult.workspaces);
+
+    const host = paired[0]!;
+    const client = new PocketHostClient(host);
+    const treeMap: Record<string, Worktree[]> = {};
+    await Promise.all(
+      workspaceResult.workspaces.map(async (w) => {
+        try {
+          treeMap[w.id] = await client.listWorktrees(w.id);
+        } catch {
+          treeMap[w.id] = [];
+        }
+      }),
+    );
+    setWorktreesByWorkspace(treeMap);
+
+    const savedWs = await loadSelectedWorkspaceId(host.hostId);
+    const savedWt = await loadSelectedWorktreeId(host.hostId);
+    const wsStillThere = workspaceResult.workspaces.some((w) => w.id === savedWs);
+    const activeWsId = wsStillThere
+      ? savedWs
+      : workspaceResult.workspaces[0]?.id ?? null;
+    setSelectedWorkspaceId(activeWsId);
+    const trees = activeWsId ? treeMap[activeWsId] ?? [] : [];
+    const wtStillThere = trees.some((t) => t.id === savedWt);
+    setSelectedWorktreeId(wtStillThere ? savedWt : trees[0]?.id ?? null);
+
+    const hostErrors = [...agentResult.errors, ...workspaceResult.errors];
+    setConnectionError(
+      hostErrors.length
+        ? `${hostErrors.length} host${hostErrors.length === 1 ? "" : "s"} unavailable`
+        : null,
+    );
     setLoading(false);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-    }, [refresh]),
+      void (async () => {
+        if (!(await loadOnboardingComplete())) {
+          router.replace("/onboarding");
+          return;
+        }
+        await refresh();
+      })();
+    }, [refresh, router]),
   );
 
   const counts = countByFilter(agents);
+  const selectedWorkspace =
+    workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0];
+  const selectedWorktree =
+    selectedWorkspace && selectedWorktreeId
+      ? (worktreesByWorkspace[selectedWorkspace.id] ?? []).find((t) => t.id === selectedWorktreeId)
+      : selectedWorkspace
+        ? (worktreesByWorkspace[selectedWorkspace.id] ?? [])[0]
+        : undefined;
+  const workspaceLabel = selectedWorkspace
+    ? selectedWorkspace.fullName ?? selectedWorkspace.name
+    : hosts.length === 0
+      ? "Pair a host"
+      : "Add repository";
+  const branchLabel = selectedWorktree
+    ? selectedWorktree.branch
+    : selectedWorkspace
+      ? "Select branch"
+      : null;
 
-  async function submitComposer() {
-    const prompt = draft.trim();
-    if (!prompt || hosts.length === 0) {
+  function goAddRepository() {
+    if (hosts.length === 0) {
       router.push("/pair");
       return;
     }
+    router.push("/repos/add");
+  }
+
+  async function openWorkspace(ws: FleetWorkspace) {
+    setSelectedWorkspaceId(ws.id);
+    await saveSelectedWorkspaceId(ws.hostId, ws.id);
+    const trees = worktreesByWorkspace[ws.id] ?? [];
+    if (trees.length === 0) {
+      router.push({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: ws.id },
+      });
+      return;
+    }
+    router.push({
+      pathname: "/repos/[workspaceId]",
+      params: { workspaceId: ws.id },
+    });
+  }
+
+  async function submitComposer() {
+    const prompt = draft.trim();
+    if (!prompt) return;
+    if (hosts.length === 0) {
+      router.push("/pair");
+      return;
+    }
+    if (workspaces.length === 0) {
+      router.push("/repos/add");
+      return;
+    }
+    const workspace =
+      workspaces.find((w) => w.id === selectedWorkspaceId) ?? workspaces[0]!;
+    const trees = worktreesByWorkspace[workspace.id] ?? [];
+    if (trees.length === 0) {
+      router.push({
+        pathname: "/repos/[workspaceId]/worktree",
+        params: { workspaceId: workspace.id },
+      });
+      return;
+    }
+    const worktree =
+      trees.find((t) => t.id === selectedWorktreeId) ?? trees[0]!;
     if (launching) return;
     setLaunching(true);
     try {
       const host = hosts[0]!;
       const client = new PocketHostClient(host);
-      const short =
-        prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
+      const short = prompt.length > 28 ? `${prompt.slice(0, 28).trim()}…` : prompt;
       const agent = await client.launch({
         name: short,
         prompt,
+        worktreeId: worktree.id,
+        workspaceId: workspace.id,
+        cwd: worktree.cwd,
       });
+      await saveSelectedWorkspaceId(host.hostId, workspace.id);
+      await saveSelectedWorktreeId(host.hostId, worktree.id);
       setDraft("");
       router.push({
         pathname: "/agent/[hostId]/[agentId]",
@@ -91,6 +215,11 @@ export default function InboxScreen() {
     }
   }
 
+  const emptyBody =
+    hosts.length === 0
+      ? "Pair a desktop bridge, then add a repository."
+      : "Add a GitHub repository, create a worktree, then send a task.";
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <ScrollView
@@ -106,7 +235,7 @@ export default function InboxScreen() {
       >
         <View style={styles.topBar}>
           <CircleButton
-            accessibilityLabel="Profile"
+            accessibilityLabel="Hosts"
             tone="elevated"
             onPress={() => router.push("/hosts")}
           >
@@ -118,7 +247,7 @@ export default function InboxScreen() {
             <CircleButton accessibilityLabel="Search" onPress={() => router.push("/agents/all")}>
               <Icon name="search" size={19} color={colors.ink} strokeWidth={1.9} />
             </CircleButton>
-            <CircleButton accessibilityLabel="Pair host" onPress={() => router.push("/pair")}>
+            <CircleButton accessibilityLabel="Add repository" onPress={goAddRepository}>
               <Icon name="folderPlus" size={19} color={colors.ink} strokeWidth={1.75} />
             </CircleButton>
           </View>
@@ -163,7 +292,7 @@ export default function InboxScreen() {
         {connectionError ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open workspaces to reconnect"
+            accessibilityLabel="Open hosts to reconnect"
             style={({ pressed }) => [styles.connectionNotice, pressed && styles.pressed]}
             onPress={() => router.push("/hosts")}
           >
@@ -175,54 +304,163 @@ export default function InboxScreen() {
 
         <Text style={styles.sectionLabel}>Workspaces</Text>
 
-        {hosts.length === 0 ? (
-          loading ? (
-            <View style={styles.loadingCard}>
-              <ActivityIndicator color={colors.muted2} />
+        {loading && workspaces.length === 0 && hosts.length > 0 ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={colors.muted2} />
+          </View>
+        ) : workspaces.length === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add a repository"
+            style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
+            onPress={goAddRepository}
+          >
+            <View style={styles.emptyIcon}>
+              <Icon name="folderPlus" size={19} color={colors.muted} strokeWidth={1.75} />
             </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add a workspace"
-              style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
-              onPress={() => router.push("/pair")}
-            >
-              <View style={styles.emptyIcon}>
-                <Icon name="folderPlus" size={19} color={colors.muted} strokeWidth={1.75} />
-              </View>
-              <View style={styles.emptyText}>
-                <Text style={styles.emptyTitle}>No workspaces yet</Text>
-                <Text style={styles.emptyBody}>Pair a desktop bridge to add one.</Text>
-              </View>
-              <Icon name="chevronRight" size={17} color={colors.muted2} strokeWidth={2} />
-            </Pressable>
-          )
+            <View style={styles.emptyText}>
+              <Text style={styles.emptyTitle}>No repositories yet</Text>
+              <Text style={styles.emptyBody}>{emptyBody}</Text>
+            </View>
+            <Icon name="chevronRight" size={17} color={colors.muted2} strokeWidth={2} />
+          </Pressable>
         ) : (
           <View style={styles.workspaces}>
-            {hosts.map((h) => (
-              <WorkspaceRow
-                key={h.hostId}
-                name={h.label}
-                variant="plain"
-                onPress={() => router.push("/hosts")}
-              />
-            ))}
+            {workspaces.map((w) => {
+              const trees = worktreesByWorkspace[w.id] ?? [];
+              const n = trees.length;
+              const subtitle =
+                n === 0
+                  ? "No worktrees — tap to create one"
+                  : n === 1
+                    ? `1 worktree · default ${w.defaultBranch ?? "main"}`
+                    : `${n} worktrees · default ${w.defaultBranch ?? "main"}`;
+              return (
+                <WorkspaceRow
+                  key={w.id}
+                  name={w.fullName ?? w.name}
+                  subtitle={subtitle}
+                  variant="plain"
+                  icon={w.source === "github" ? "github" : "folder"}
+                  selected={w.id === selectedWorkspaceId}
+                  onPress={() => void openWorkspace(w)}
+                />
+              );
+            })}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add another repository"
+              style={({ pressed }) => [styles.addMore, pressed && styles.pressed]}
+              onPress={goAddRepository}
+            >
+              <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
+              <Text style={styles.addMoreText}>Add repository</Text>
+            </Pressable>
           </View>
         )}
 
-        <View style={[styles.dockSpacer, { height: 96 + bottomInset }]} />
+        <View style={[styles.dockSpacer, { height: 148 + bottomInset }]} />
       </ScrollView>
 
       <ComposerDock restingBottom={Math.max(14, bottomInset + 10)}>
         <PillComposer
           value={draft}
           onChangeText={setDraft}
-          onPlus={() => router.push("/pair")}
+          onPlus={goAddRepository}
           onSubmit={() => void submitComposer()}
           sending={launching}
           placeholder="Plan, ask, build..."
+          workspaceLabel={workspaceLabel}
+          branchLabel={branchLabel}
+          workspaceIcon={selectedWorkspace?.source === "github" ? "github" : "folder"}
+          onWorkspacePress={() => {
+            if (hosts.length === 0) {
+              router.push("/pair");
+              return;
+            }
+            if (workspaces.length === 0) {
+              goAddRepository();
+              return;
+            }
+            setWorkspacePickerOpen(true);
+          }}
+          onBranchPress={() => {
+            if (!selectedWorkspace) {
+              if (hosts.length === 0) router.push("/pair");
+              else goAddRepository();
+              return;
+            }
+            void openWorkspace(selectedWorkspace);
+          }}
         />
       </ComposerDock>
+
+      <Modal
+        visible={workspacePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWorkspacePickerOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setWorkspacePickerOpen(false)}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Workspace</Text>
+            {workspaces.map((w) => {
+              const selected = w.id === selectedWorkspace?.id;
+              return (
+                <Pressable
+                  key={w.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select workspace ${w.fullName ?? w.name}`}
+                  onPress={() => {
+                    void (async () => {
+                      setSelectedWorkspaceId(w.id);
+                      await saveSelectedWorkspaceId(w.hostId, w.id);
+                      const trees = worktreesByWorkspace[w.id] ?? [];
+                      const nextTree =
+                        trees.find((t) => t.id === selectedWorktreeId) ?? trees[0];
+                      setSelectedWorktreeId(nextTree?.id ?? null);
+                      if (nextTree) await saveSelectedWorktreeId(w.hostId, nextTree.id);
+                      setWorkspacePickerOpen(false);
+                    })();
+                  }}
+                  style={({ pressed }) => [
+                    styles.modalRow,
+                    selected && styles.modalRowSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Icon
+                    name={w.source === "github" ? "github" : "folder"}
+                    size={18}
+                    color={colors.ink2}
+                    strokeWidth={1.7}
+                  />
+                  <Text style={styles.modalRowText} numberOfLines={1}>
+                    {w.fullName ?? w.name}
+                  </Text>
+                  {selected ? (
+                    <Icon name="checkCircle" size={18} color={colors.ink} strokeWidth={1.8} />
+                  ) : (
+                    <View style={{ width: 18 }} />
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add repository"
+              onPress={() => {
+                setWorkspacePickerOpen(false);
+                goAddRepository();
+              }}
+              style={({ pressed }) => [styles.modalAdd, pressed && styles.pressed]}
+            >
+              <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
+              <Text style={styles.modalAddText}>Add repository</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -255,9 +493,47 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   inboxTitle: { ...type.display, marginTop: 22, marginBottom: 22 },
-  grid: { gap: space.gap, marginBottom: 30, marginHorizontal: -4 },
+  grid: { gap: space.gap, marginBottom: 22, marginHorizontal: -4 },
   gridRow: { flexDirection: "row", gap: space.gap },
   sectionLabel: { ...type.body, color: colors.muted, marginLeft: 1, marginBottom: 7 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 32, 0.35)",
+    justifyContent: "flex-end",
+    padding: 16,
+    paddingBottom: 28,
+  },
+  modalSheet: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 10,
+    maxHeight: "70%",
+  },
+  modalTitle: { ...type.row, fontSize: 17, fontWeight: "600", marginBottom: 10, marginLeft: 4 },
+  modalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  modalRowSelected: { backgroundColor: "#F0F4F8" },
+  modalRowText: { ...type.row, fontSize: 16, flex: 1 },
+  modalAdd: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  modalAddText: { ...type.row, fontSize: 15, color: colors.ink2, fontWeight: "500" },
+
   connectionNotice: {
     flexDirection: "row",
     alignItems: "center",
@@ -271,6 +547,13 @@ const styles = StyleSheet.create({
   connectionDot: { width: 7, height: 7, borderRadius: radii.circle, backgroundColor: colors.needsAttention },
   connectionText: { ...type.meta, color: colors.ink2, flex: 1 },
   workspaces: { gap: 0 },
+  addMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  addMoreText: { ...type.meta, color: colors.ink2, fontSize: 15, fontWeight: "500" },
   pressed: { opacity: 0.7 },
   loadingCard: {
     backgroundColor: colors.bgElevated,

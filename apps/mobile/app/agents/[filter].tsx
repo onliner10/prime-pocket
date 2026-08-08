@@ -22,7 +22,7 @@ const TITLES: Record<InboxFilter, string> = {
 const EMPTY: Record<InboxFilter, { title: string; body: string; icon: IconName; accent: string }> = {
   all: {
     title: "No Agents Yet",
-    body: "Pair a workspace and launch an agent to see it here.",
+    body: "Pair a host, add a repository, and launch an agent to see it here.",
     icon: "converge",
     accent: colors.allAgents,
   },

@@ -5,6 +5,19 @@ export const Routes = {
   host: `${API_PREFIX}/host`,
   pair: `${API_PREFIX}/pair`,
   pairInfo: `${API_PREFIX}/pair/info`,
+  workspaces: `${API_PREFIX}/workspaces`,
+  workspace: (id: string) => `${API_PREFIX}/workspaces/${encodeURIComponent(id)}`,
+  workspacesFromGitHub: `${API_PREFIX}/workspaces/from-github`,
+  workspaceWorktrees: (id: string) =>
+    `${API_PREFIX}/workspaces/${encodeURIComponent(id)}/worktrees`,
+  worktree: (workspaceId: string, worktreeId: string) =>
+    `${API_PREFIX}/workspaces/${encodeURIComponent(workspaceId)}/worktrees/${encodeURIComponent(worktreeId)}`,
+  githubStatus: `${API_PREFIX}/github/status`,
+  githubRepos: `${API_PREFIX}/github/repos`,
+  githubRepoBranches: (owner: string, repo: string) =>
+    `${API_PREFIX}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+  githubConnect: `${API_PREFIX}/github/connect`,
+  githubDisconnect: `${API_PREFIX}/github/disconnect`,
   agents: `${API_PREFIX}/agents`,
   agent: (id: string) => `${API_PREFIX}/agents/${encodeURIComponent(id)}`,
   agentPrompt: (id: string) => `${API_PREFIX}/agents/${encodeURIComponent(id)}/prompt`,

@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import {
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { colors, radii, shadows, type } from "../theme";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
 export type PendingImage = {
   id: string;
@@ -11,13 +20,51 @@ export type PendingImage = {
   name?: string;
 };
 
+type ContextChipProps = {
+  label: string;
+  accessibilityLabel: string;
+  icon: IconName;
+  onPress?: () => void;
+  disabled?: boolean;
+  flex?: boolean;
+};
+
+function ContextChip({
+  label,
+  accessibilityLabel,
+  icon,
+  onPress,
+  disabled,
+  flex,
+}: ContextChipProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      disabled={disabled || !onPress}
+      style={({ pressed }) => [
+        styles.contextChip,
+        flex && styles.contextChipFlex,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Icon name={icon} size={14} color={colors.ink2} strokeWidth={1.8} />
+      <Text style={styles.contextText} numberOfLines={1}>
+        {label}
+      </Text>
+      <Icon name="chevronDown" size={14} color={colors.muted} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
 /**
- * Cursor-like composer. Empty and blurred, it is a single floating pill: round
- * +, prompt field, round mic/send. Focused (or with attachments) it expands
- * into a sheet so the text field stays clearly visible above the keyboard.
+ * Cursor-like composer. Workspace and branch are separate selectors on the
+ * card so a typed prompt always shows both destination contexts.
  *
- * Tree shape stays stable across focus so the TextInput is not remounted
- * (which would dismiss the keyboard).
+ * Focused (or with attachments) it expands into a sheet so the text field
+ * stays clearly visible above the keyboard. Tree shape stays stable across
+ * focus so the TextInput is not remounted (which would dismiss the keyboard).
  */
 export function PillComposer({
   value,
@@ -30,6 +77,11 @@ export function PillComposer({
   sending = false,
   imagesEnabled = true,
   onFocusChange,
+  workspaceLabel,
+  branchLabel,
+  onWorkspacePress,
+  onBranchPress,
+  workspaceIcon = "github",
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -41,10 +93,18 @@ export function PillComposer({
   sending?: boolean;
   imagesEnabled?: boolean;
   onFocusChange?: (focused: boolean) => void;
+  /** Repository / workspace, e.g. "acme/checkout-web" */
+  workspaceLabel?: string | null;
+  /** Branch / worktree, e.g. "feat/hello-world" */
+  branchLabel?: string | null;
+  onWorkspacePress?: () => void;
+  onBranchPress?: () => void;
+  workspaceIcon?: IconName;
 }) {
   const [focused, setFocused] = useState(false);
   const hasImages = pendingImages.length > 0;
-  const expanded = focused || hasImages;
+  const hasContext = Boolean(workspaceLabel?.trim() || branchLabel?.trim());
+  const expanded = focused || hasImages || hasContext;
   const canSend = !sending && (value.trim().length > 0 || hasImages);
 
   function setFocus(next: boolean) {
@@ -94,6 +154,31 @@ export function PillComposer({
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         />
+
+        {hasContext ? (
+          <View style={styles.contextRow}>
+            {workspaceLabel?.trim() ? (
+              <ContextChip
+                label={workspaceLabel.trim()}
+                accessibilityLabel={`Workspace selector, ${workspaceLabel.trim()}`}
+                icon={workspaceIcon}
+                onPress={onWorkspacePress}
+                disabled={sending}
+                flex
+              />
+            ) : null}
+            {branchLabel?.trim() ? (
+              <ContextChip
+                label={branchLabel.trim()}
+                accessibilityLabel={`Branch selector, ${branchLabel.trim()}`}
+                icon="gitBranch"
+                onPress={onBranchPress}
+                disabled={sending}
+                flex
+              />
+            ) : null}
+          </View>
+        ) : null}
 
         {hasImages ? (
           <ScrollView
@@ -188,6 +273,36 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     opacity: 0,
     overflow: "hidden",
+  },
+  contextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 2,
+    paddingHorizontal: 2,
+  },
+  contextChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#F0F2F5",
+    maxWidth: "100%",
+  },
+  contextChipFlex: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  contextText: {
+    ...type.meta,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "600",
+    flexShrink: 1,
+    letterSpacing: -0.2,
   },
   previews: { maxHeight: 88, marginBottom: 2 },
   previewsContent: { flexDirection: "row", alignItems: "flex-start", paddingBottom: 4 },
