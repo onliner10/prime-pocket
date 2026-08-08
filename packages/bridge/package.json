@@ -13,7 +13,7 @@
     "dev": "tsx watch src/cli.ts bridge",
     "start": "node dist/cli.js bridge",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import tsx --test src/**/*.test.ts src/**/**/*.test.ts",
     "e2e": "node --import tsx src/e2e-smoke.ts"
   },
   "dependencies": {
