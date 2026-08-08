@@ -24,10 +24,10 @@ const TOKEN_SETUP_URL =
 /** Fetch failures the platform reports with no HTTP status behind them. */
 const UNREACHABLE = /network request failed|failed to fetch|load failed|timed out|aborted/i;
 
-function describeError(e: unknown, baseUrl?: string): string {
+function describeError(e: unknown): string {
   const message = e instanceof Error ? e.message : String(e);
   if (UNREACHABLE.test(message)) {
-    return `Can't reach the bridge${baseUrl ? ` at ${baseUrl}` : ""}. Check that prime-pocket bridge is running and that this phone is on the same LAN or tailnet.`;
+    return "Can't reach the bridge. Check that prime-pocket bridge is running on the host and that this phone is on the same LAN or tailnet.";
   }
   return message;
 }
@@ -62,7 +62,7 @@ export default function GitHubConnectScreen() {
         setStatus(await client.githubStatus());
       } catch (e) {
         setStatus(null);
-        setError(describeError(e, first.baseUrl));
+        setError(describeError(e));
       }
     } finally {
       setChecking(false);
@@ -93,7 +93,7 @@ export default function GitHubConnectScreen() {
       const client = new PocketHostClient(host);
       setStatus(await client.connectGitHub({ mode: "mock" }));
     } catch (e) {
-      setError(describeError(e, host.baseUrl));
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -114,7 +114,7 @@ export default function GitHubConnectScreen() {
       setStatus(next);
       setToken("");
     } catch (e) {
-      setError(describeError(e, host.baseUrl));
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -248,7 +248,7 @@ export default function GitHubConnectScreen() {
                 <Text style={styles.cardBody}>
                   {status.mockAvailable
                     ? "This host supports mock GitHub for demos — no credentials needed."
-                    : `Paste a personal access token to list repositories and branches. ${host.label} keeps it; the app does not.`}
+                    : `Paste a personal access token to list repositories and branches. It stays on ${host.label} — the app never keeps a copy.`}
                 </Text>
               </View>
             </View>
@@ -281,14 +281,13 @@ export default function GitHubConnectScreen() {
                   autoComplete="off"
                   spellCheck={false}
                   placeholder="ghp_…"
-                  placeholderTextColor={colors.muted2}
+                  placeholderTextColor={colors.muted}
                   onSubmitEditing={() => void connectToken()}
                   returnKeyType="go"
                 />
                 <Text style={styles.hint}>
                   A classic token needs the <Text style={styles.mono}>repo</Text> scope; a
-                  fine-grained token needs read access to Contents and Metadata. A host env var{" "}
-                  <Text style={styles.mono}>PRIME_POCKET_GITHUB_TOKEN</Text> works too.
+                  fine-grained token needs read access to Contents and Metadata.
                 </Text>
                 <Pressable
                   accessibilityRole="link"
@@ -366,7 +365,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   secondaryText: { ...type.row, color: colors.ink, fontWeight: "600", fontSize: 16 },
-  primaryDisabled: { backgroundColor: colors.muted2 },
+  primaryDisabled: { opacity: 0.35 },
   form: { gap: 10 },
   label: { ...type.meta, color: colors.ink2, fontWeight: "600" },
   input: {
