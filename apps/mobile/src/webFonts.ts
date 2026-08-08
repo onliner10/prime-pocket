@@ -40,9 +40,17 @@ export const WEB_FONT_CSS = `
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #F2F2F2;
+  /* Matches Tamagui's $background so the shell never flashes a wrong page
+     colour before the app mounts. */
+  background: hsl(0, 0%, 97%);
+  color-scheme: light dark;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+@media (prefers-color-scheme: dark) {
+  html, body, #root {
+    background: hsl(0, 0%, 7%);
+  }
 }
 body {
   overflow: hidden;
