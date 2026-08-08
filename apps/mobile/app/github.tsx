@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -34,17 +34,26 @@ function describeError(e: unknown): string {
 
 /**
  * Connect GitHub on the paired host.
- * Demo bridges connect a mock catalog with no credentials; live bridges take a personal
- * access token that is stored on the host and never held by the app.
+ * Live hosts prefer browser device-flow (Cursor-style); PAT paste remains a fallback.
+ * Demo bridges keep one-tap mock connect.
  */
 export default function GitHubConnectScreen() {
   const router = useRouter();
   const [host, setHost] = useState<PairedHost | null>(null);
   const [status, setStatus] = useState<GitHubStatus | null>(null);
   const [token, setToken] = useState("");
+  const [showTokenForm, setShowTokenForm] = useState(false);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPoll = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -72,8 +81,33 @@ export default function GitHubConnectScreen() {
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh]),
+      return () => stopPoll();
+    }, [refresh, stopPoll]),
   );
+
+  // Poll the bridge while a device-flow authorization is outstanding.
+  useEffect(() => {
+    stopPoll();
+    if (!host || !status?.oauth || status.connected) return;
+
+    const intervalMs = Math.max(2, status.oauth.interval ?? 5) * 1000;
+    pollRef.current = setInterval(() => {
+      void (async () => {
+        try {
+          const client = new PocketHostClient(host);
+          const next = await client.githubStatus();
+          setStatus(next);
+          if (next.connected || !next.oauth) {
+            stopPoll();
+          }
+        } catch {
+          // Keep waiting; transient LAN blips are common on mobile.
+        }
+      })();
+    }, intervalMs);
+
+    return () => stopPoll();
+  }, [host, status?.oauth?.userCode, status?.connected, status?.oauth?.interval, stopPoll]);
 
   async function retry() {
     if (busy) return;
@@ -99,6 +133,31 @@ export default function GitHubConnectScreen() {
     }
   }
 
+  async function connectOAuth() {
+    if (!host || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const client = new PocketHostClient(host);
+      const next = await client.connectGitHub({ mode: "oauth" });
+      setStatus(next);
+      const uri = next.oauth?.verificationUri;
+      if (uri) {
+        await Linking.openURL(uri);
+      }
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openVerification() {
+    const uri = status?.oauth?.verificationUri;
+    if (!uri) return;
+    await Linking.openURL(uri);
+  }
+
   async function connectToken() {
     if (!host || busy) return;
     const value = token.trim();
@@ -113,6 +172,7 @@ export default function GitHubConnectScreen() {
       const next = await client.connectGitHub({ mode: "token", token: value });
       setStatus(next);
       setToken("");
+      setShowTokenForm(false);
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -124,6 +184,7 @@ export default function GitHubConnectScreen() {
     if (!host || busy) return;
     setBusy(true);
     setError(null);
+    stopPoll();
     try {
       const client = new PocketHostClient(host);
       setStatus(await client.disconnectGitHub());
@@ -133,6 +194,12 @@ export default function GitHubConnectScreen() {
       setBusy(false);
     }
   }
+
+  const oauthPending = Boolean(status?.oauth && !status.connected);
+  const oauthExpired =
+    oauthPending && status?.oauth
+      ? Date.parse(status.oauth.expiresAt) <= Date.now()
+      : false;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -212,7 +279,8 @@ export default function GitHubConnectScreen() {
               <Icon name="github" size={22} color={colors.ink} strokeWidth={1.7} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
-                  Connected{status.mock ? " · mock" : ""}
+                  Connected
+                  {status.mock ? " · mock" : status.mode === "oauth" ? " · browser" : ""}
                 </Text>
                 <Text style={styles.cardBody}>Signed in as {status.login ?? "GitHub"}</Text>
               </View>
@@ -248,7 +316,11 @@ export default function GitHubConnectScreen() {
                 <Text style={styles.cardBody}>
                   {status.mockAvailable
                     ? "This host supports mock GitHub for demos — no credentials needed."
-                    : `Paste a personal access token to list repositories and branches. It stays on ${host.label} — the app never keeps a copy.`}
+                    : oauthPending
+                      ? "Finish signing in on github.com, then return here. The bridge waits for authorization."
+                      : status.oauthAvailable
+                        ? `Sign in with GitHub in the browser. The token stays on ${host.label}.`
+                        : `Browser login is not configured on ${host.label}. Paste a personal access token, or set PRIME_POCKET_GITHUB_CLIENT_ID on the host.`}
                 </Text>
               </View>
             </View>
@@ -267,60 +339,138 @@ export default function GitHubConnectScreen() {
                   <Text style={styles.primaryText}>Use mock GitHub</Text>
                 )}
               </Pressable>
-            ) : (
+            ) : oauthPending && status.oauth ? (
               <View style={styles.form}>
-                <Text style={styles.label}>Personal access token</Text>
-                <TextInput
-                  accessibilityLabel="GitHub personal access token"
-                  style={styles.input}
-                  value={token}
-                  onChangeText={setToken}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="ghp_…"
-                  placeholderTextColor={colors.muted}
-                  onSubmitEditing={() => void connectToken()}
-                  returnKeyType="go"
-                />
+                <Text style={styles.label}>Enter this code on GitHub</Text>
+                <Text
+                  accessibilityLabel={`GitHub device code ${status.oauth.userCode}`}
+                  style={styles.userCode}
+                >
+                  {status.oauth.userCode}
+                </Text>
                 <Text style={styles.hint}>
-                  A classic token needs the <Text style={styles.mono}>repo</Text> scope; a
-                  fine-grained token needs read access to Contents and Metadata.
+                  {oauthExpired
+                    ? "This code expired. Start again to get a new one."
+                    : "Waiting for you to authorize in the browser…"}
                 </Text>
                 <Pressable
-                  accessibilityRole="link"
-                  accessibilityLabel="Create a token on github.com"
-                  onPress={() => void Linking.openURL(TOKEN_SETUP_URL)}
-                  style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
-                >
-                  <Text style={styles.link}>Create a token on github.com</Text>
-                  <Icon name="chevronRight" size={15} color={colors.ink2} strokeWidth={1.9} />
-                </Pressable>
-                <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Connect GitHub"
-                  disabled={busy || !token.trim()}
-                  onPress={() => void connectToken()}
-                  style={({ pressed }) => [
-                    styles.primary,
-                    !token.trim() && styles.primaryDisabled,
-                    pressed && styles.pressed,
-                  ]}
+                  accessibilityLabel="Open GitHub"
+                  onPress={() => void openVerification()}
+                  style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
                 >
-                  {busy ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryText}>Connect GitHub</Text>
-                  )}
+                  <Text style={styles.primaryText}>Open GitHub</Text>
                 </Pressable>
+                {oauthExpired ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Start again"
+                    disabled={busy}
+                    onPress={() => void connectOAuth()}
+                    style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color={colors.ink} />
+                    ) : (
+                      <Text style={styles.secondaryText}>Start again</Text>
+                    )}
+                  </Pressable>
+                ) : (
+                  <View style={styles.waitingRow}>
+                    <ActivityIndicator color={colors.muted} />
+                    <Text style={styles.cardBody}>Listening on the host…</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.form}>
+                {status.oauthAvailable ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with GitHub"
+                    disabled={busy}
+                    onPress={() => void connectOAuth()}
+                    style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryText}>Continue with GitHub</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+
+                {showTokenForm || !status.oauthAvailable ? (
+                  <>
+                    <Text style={styles.label}>Personal access token</Text>
+                    <TextInput
+                      accessibilityLabel="GitHub personal access token"
+                      style={styles.input}
+                      value={token}
+                      onChangeText={setToken}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="ghp_…"
+                      placeholderTextColor={colors.muted}
+                      onSubmitEditing={() => void connectToken()}
+                      returnKeyType="go"
+                    />
+                    <Text style={styles.hint}>
+                      A classic token needs the <Text style={styles.mono}>repo</Text> scope; a
+                      fine-grained token needs read access to Contents and Metadata.
+                    </Text>
+                    <Pressable
+                      accessibilityRole="link"
+                      accessibilityLabel="Create a token on github.com"
+                      onPress={() => void Linking.openURL(TOKEN_SETUP_URL)}
+                      style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.link}>Create a token on github.com</Text>
+                      <Icon name="chevronRight" size={15} color={colors.ink2} strokeWidth={1.9} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Connect with token"
+                      disabled={busy || !token.trim()}
+                      onPress={() => void connectToken()}
+                      style={({ pressed }) => [
+                        status.oauthAvailable ? styles.secondary : styles.primary,
+                        !token.trim() && styles.primaryDisabled,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {busy ? (
+                        <ActivityIndicator color={status.oauthAvailable ? colors.ink : "#fff"} />
+                      ) : (
+                        <Text
+                          style={
+                            status.oauthAvailable ? styles.secondaryText : styles.primaryText
+                          }
+                        >
+                          Connect with token
+                        </Text>
+                      )}
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Use a personal access token instead"
+                    onPress={() => setShowTokenForm(true)}
+                    style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.link}>Use a personal access token instead</Text>
+                    <Icon name="chevronRight" size={15} color={colors.ink2} strokeWidth={1.9} />
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
         )}
 
-        {/* The unreachable card already carries its own copy of the error. */}
         {error && status ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
     </SafeAreaView>
@@ -349,6 +499,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   checkingCard: { flexDirection: "row", alignItems: "center", gap: 12 },
+  waitingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
   cardTitle: { ...type.row, fontSize: 17, fontWeight: "600" },
   cardBody: { ...type.meta, color: colors.muted, marginTop: 3, fontSize: 13, lineHeight: 18 },
   primary: {
@@ -368,6 +519,15 @@ const styles = StyleSheet.create({
   primaryDisabled: { opacity: 0.35 },
   form: { gap: 10 },
   label: { ...type.meta, color: colors.ink2, fontWeight: "600" },
+  userCode: {
+    ...type.row,
+    fontFamily: fonts.mono,
+    fontSize: 28,
+    letterSpacing: 2,
+    textAlign: "center",
+    paddingVertical: 10,
+    color: colors.ink,
+  },
   input: {
     ...type.input,
     backgroundColor: colors.bgSunken,

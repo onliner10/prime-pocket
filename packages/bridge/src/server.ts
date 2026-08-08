@@ -130,7 +130,7 @@ export class BridgeServer {
         mock: Boolean(this.backend.capabilities.demoMode),
         getToken: () => {
           const auth = this.store.getGitHubAuth();
-          return auth ? { token: auth.token, login: auth.login } : undefined;
+          return auth ? { token: auth.token, login: auth.login, mode: auth.mode } : undefined;
         },
         setToken: (auth) => {
           if (auth) this.store.setGitHubAuth(auth);

@@ -30,6 +30,10 @@ program
     "--github-token <token>",
     "GitHub personal access token to store on this host (or set PRIME_POCKET_GITHUB_TOKEN)",
   )
+  .option(
+    "--github-client-id <id>",
+    "GitHub OAuth App client id for browser/device login (or set PRIME_POCKET_GITHUB_CLIENT_ID)",
+  )
   .action(async (opts: {
     port: string;
     demo?: boolean;
@@ -40,13 +44,17 @@ program
     ntfyServer?: string;
     daemonSocket?: string;
     githubToken?: string;
+    githubClientId?: string;
   }) => {
     const store = new BridgeStore(opts.dataDir, opts.hostName);
     if (opts.ntfyTopic) {
       store.setNtfy(opts.ntfyTopic, opts.ntfyServer);
     }
     if (opts.githubToken?.trim()) {
-      store.setGitHubAuth({ token: opts.githubToken.trim() });
+      store.setGitHubAuth({ token: opts.githubToken.trim(), mode: "token" });
+    }
+    if (opts.githubClientId?.trim()) {
+      process.env.PRIME_POCKET_GITHUB_CLIENT_ID = opts.githubClientId.trim();
     }
 
     const { backend, mode } = await createBackend({
@@ -78,8 +86,10 @@ program
         github.mock
           ? "mock catalog (demo)"
           : github.connected
-            ? `token${github.login ? ` (${github.login})` : ""}`
-            : "not connected — paste a personal access token from the app"
+            ? `${github.mode}${github.login ? ` (${github.login})` : ""}`
+            : github.oauthAvailable
+              ? "not connected — Continue with GitHub in the app"
+              : "not connected — set --github-client-id for browser login, or paste a PAT"
       }`,
     );
     if (store.data.ntfyTopic) {

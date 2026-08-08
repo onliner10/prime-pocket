@@ -186,7 +186,7 @@ describe("TokenGitHubProvider", () => {
     assert.equal(status.mode, "token");
     assert.equal(status.mock, false);
     assert.equal(status.login, "octocat");
-    assert.deepEqual(saved, [{ token: "ghp_secret", login: "octocat" }]);
+    assert.deepEqual(saved, [{ token: "ghp_secret", login: "octocat", mode: "token" }]);
 
     assert.equal(calls.length, 1);
     const headers = calls[0]!.headers;
@@ -224,10 +224,93 @@ describe("TokenGitHubProvider", () => {
     assert.equal(provider.status().connected, false);
   });
 
-  it("explains that mock and OAuth connects are not available live", async () => {
+  it("rejects mock connects and unconfigured OAuth", async () => {
     const provider = new TokenGitHubProvider({ apiBase: API_BASE });
     await assert.rejects(() => provider.connect({ mode: "mock" }), /--demo/);
-    await assert.rejects(() => provider.connect({ mode: "oauth" }), /personal access token/i);
+    await assert.rejects(
+      () => provider.connect({ mode: "oauth" }),
+      (e: unknown) => {
+        assert.ok(e instanceof GitHubApiError);
+        assert.equal(e.code, "github_oauth_unconfigured");
+        return true;
+      },
+    );
+    assert.equal(provider.status().oauthAvailable, false);
+  });
+
+  it("runs GitHub device-flow OAuth and stores the access token", async () => {
+    const LOGIN_BASE = "https://github.test";
+    let tokenPolls = 0;
+    const timers: Array<() => void | Promise<void>> = [];
+    const saved: Array<{ token: string; login: string; mode: string } | null> = [];
+
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url === `${LOGIN_BASE}/login/device/code`) {
+        assert.equal(init?.method, "POST");
+        return new Response(
+          JSON.stringify({
+            device_code: "device-abc",
+            user_code: "WDJB-MJHT",
+            verification_uri: "https://github.com/login/device",
+            expires_in: 900,
+            interval: 1,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url === `${LOGIN_BASE}/login/oauth/access_token`) {
+        tokenPolls += 1;
+        if (tokenPolls < 2) {
+          return new Response(JSON.stringify({ error: "authorization_pending" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ access_token: "gho_from_oauth", token_type: "bearer", scope: "repo" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.startsWith(`${API_BASE}/user`)) {
+        return new Response(JSON.stringify({ login: "octocat" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), { status: 404 });
+    };
+
+    const provider = new TokenGitHubProvider({
+      apiBase: API_BASE,
+      loginBase: LOGIN_BASE,
+      clientId: "Ov23li_test_client",
+      fetchImpl,
+      setToken: (auth) => saved.push(auth),
+      schedule: (fn) => {
+        timers.push(fn);
+        return { clear: () => undefined };
+      },
+    });
+
+    assert.equal(provider.status().oauthAvailable, true);
+    const started = await provider.connect({ mode: "oauth" });
+    assert.equal(started.connected, false);
+    assert.equal(started.oauth?.userCode, "WDJB-MJHT");
+    assert.equal(started.oauth?.verificationUri, "https://github.com/login/device");
+    assert.equal(timers.length, 1);
+
+    await timers.shift()!();
+    assert.equal(provider.status().connected, false);
+    assert.equal(tokenPolls, 1);
+    assert.equal(timers.length, 1);
+
+    await timers.shift()!();
+    assert.equal(provider.status().connected, true);
+    assert.equal(provider.status().mode, "oauth");
+    assert.equal(provider.status().login, "octocat");
+    assert.equal(provider.status().oauth, undefined);
+    assert.deepEqual(saved, [{ token: "gho_from_oauth", login: "octocat", mode: "oauth" }]);
   });
 
   it("maps repositories from /user/repos and filters by query", async () => {
@@ -470,6 +553,7 @@ describe("github over the bridge API (token host)", () => {
         mode: "token",
         mock: false,
         mockAvailable: false,
+        oauthAvailable: false,
         login: "octocat",
       });
       assert.equal(new BridgeStore(dir, "gh-live-test").getGitHubAuth()?.token, "ghp_secret");

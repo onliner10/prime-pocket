@@ -75,30 +75,45 @@ Socket probe paths include `~/.prime/agent/daemon.sock`, `~/.prime-agent/daemon.
 
 ## GitHub (host-side)
 
-Repositories and branches come from the bridge, never from a Pocket server. A live host uses a
-GitHub **personal access token** that stays on that machine — classic tokens need the `repo` scope,
-fine-grained tokens need read access to Contents and Metadata.
+Repositories and branches come from the bridge, never from a Pocket server. Live hosts prefer
+**browser login** (GitHub device flow, same idea as Cursor / `gh auth login`). The access token
+stays on that machine. Paste a personal access token only as a fallback.
 
-Three ways to give the bridge a token, in the order it looks:
+### Browser login (recommended)
+
+1. Create a [GitHub OAuth App](https://github.com/settings/applications/new) (any homepage/callback URL is fine for device flow).
+2. Enable **Device Flow** on the app settings page.
+3. Give the bridge the public client id (not a secret):
 
 ```bash
-# 1. Paste it in the app: Connect GitHub → Personal access token → Connect GitHub.
-#    The bridge validates it against /user and saves it in ~/.prime-pocket/bridge.json.
+prime-pocket bridge --github-client-id Ov23li…
+# or
+PRIME_POCKET_GITHUB_CLIENT_ID=Ov23li… prime-pocket bridge
+```
 
-# 2. Store it from the CLI once
+4. In the app: **Connect GitHub → Continue with GitHub**. Enter the one-time code on github.com; the bridge polls until authorized.
+
+Scopes requested: `repo read:user`.
+
+### Personal access token (fallback)
+
+Classic tokens need the `repo` scope; fine-grained tokens need read access to Contents and Metadata.
+
+```bash
+# 1. Paste it in the app: Connect GitHub → Use a personal access token instead
+# 2. Or store it from the CLI once
 prime-pocket bridge --github-token ghp_xxx
-
-# 3. Read it from the host environment (nothing persisted)
+# 3. Or read it from the host environment
 PRIME_POCKET_GITHUB_TOKEN=ghp_xxx prime-pocket bridge
 ```
 
-`GITHUB_TOKEN` works as a fallback for the env var. Disconnecting from the app deletes the stored
-token, and a token GitHub has revoked is dropped the next time the bridge validates it.
+`GITHUB_TOKEN` / `GITHUB_CLIENT_ID` work as env fallbacks. Disconnecting from the app deletes the
+stored credential. A revoked token is dropped the next time the bridge validates it.
 
 `--demo` (or `PRIME_POCKET_GITHUB_MOCK=1`) serves a synthetic catalog instead, so demos and e2e
 runs need no credentials. A bridge with no Prime daemon falls back to the demo backend and its mock
 catalog too; set `PRIME_POCKET_GITHUB_MOCK=0` to keep live GitHub there. `PRIME_POCKET_GITHUB_API`
-points the client at a GitHub Enterprise API base. Browser OAuth is not implemented.
+and `PRIME_POCKET_GITHUB_LOGIN` point at GitHub Enterprise hosts.
 
 ## Notifications (optional)
 

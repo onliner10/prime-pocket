@@ -12,14 +12,17 @@ State lives in `~/.prime-pocket/` (`bridge.json`, `artifacts/`), or `PRIME_POCKE
 
 ## GitHub
 
-Live hosts talk to the GitHub REST API with a personal access token held here — `bridge.json`
-after the app or `--github-token` supplies one, or `PRIME_POCKET_GITHUB_TOKEN` / `GITHUB_TOKEN`
-read straight from the environment. Classic tokens need the `repo` scope; fine-grained tokens need
-read access to Contents and Metadata.
+Live hosts prefer **browser login** via GitHub’s device flow (OAuth App + Device Flow enabled).
+Give the bridge the public client id:
 
 ```bash
-node packages/bridge/dist/cli.js bridge --http --github-token ghp_xxx
+node packages/bridge/dist/cli.js bridge --http --github-client-id Ov23li…
+# or PRIME_POCKET_GITHUB_CLIENT_ID=Ov23li…
 ```
+
+The phone starts the flow; you enter a one-time code on github.com; the bridge polls and stores
+the access token in `bridge.json`. A personal access token remains available as a fallback
+(`--github-token` / `PRIME_POCKET_GITHUB_TOKEN` / paste in the app).
 
 `--demo` and `PRIME_POCKET_GITHUB_MOCK=1` serve the mock catalog instead, which is what the e2e
 suite uses.

@@ -9,6 +9,7 @@ export {
   TokenGitHubProvider,
   createGitHubProvider,
   githubTokenFromEnv,
+  githubOAuthClientIdFromEnv,
   type GitHubProvider,
 } from "./github.js";
 export * from "./network.js";

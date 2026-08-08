@@ -21,7 +21,7 @@ export interface StoredToken {
 
 /** Host-side GitHub credential. Never leaves this machine. */
 export interface StoredGitHubAuth {
-  mode: "token";
+  mode: "token" | "oauth";
   token: string;
   login?: string;
   connectedAt?: string;
@@ -220,9 +220,13 @@ export class BridgeStore {
     return this.data.github;
   }
 
-  setGitHubAuth(auth: { token: string; login?: string }): StoredGitHubAuth {
+  setGitHubAuth(auth: {
+    token: string;
+    login?: string;
+    mode?: "token" | "oauth";
+  }): StoredGitHubAuth {
     const row: StoredGitHubAuth = {
-      mode: "token",
+      mode: auth.mode ?? "token",
       token: auth.token,
       login: auth.login,
       connectedAt: new Date().toISOString(),
